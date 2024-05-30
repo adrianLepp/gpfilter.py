@@ -12,9 +12,13 @@ parameter = {
     'sigmaY': 5e-4,
 }
 
+'''
+nonlinear system equations for Three Tank to simulate with scipy.integrate.solve_ivp
+stateTransition returns the derivative of the state vector x and has the extra argument to for time invariant systems
+'''
 class ThreeTank():
 
-    def __init__(self, param):
+    def __init__(self, param=parameter):
         self.u = param['u']
         self.c13 = param['c13']
         self.c32 = param['c32']
@@ -45,29 +49,33 @@ class ThreeTank():
         y2 = x[1] + random.normal(0, 1) * self.sigmaY
         y3 = x[2] + random.normal(0, 1) * self.sigmaY
         return [y1 , y2, y3]
-
-
-def stateTransition(x, dt):
-    for i in range(0, len(x)):
-        if x[i] < 0:
-            x[i] = 0
-
-    dx1 = 1/parameter['A']*(parameter['u']-parameter['c13']*sign(x[0]-x[2])*sqrt(2*parameter['g']*abs(x[0]-x[2])))
-    dx2 = 1/parameter['A']*(parameter['c32']*sign(x[2]-x[1])*sqrt(2*parameter['g']*abs(x[2]-x[1]))-parameter['c2R']*sqrt(2*parameter['g']*abs(x[1])))
-    dx3 = 1/parameter['A']*(parameter['c13']*sign(x[0]-x[2])*sqrt(2*parameter['g']*abs(x[0]-x[2]))-parameter['c32']*sign(x[2]-x[1])*sqrt(2*parameter['g']*abs(x[2]-x[1])))
-
-    dx1_noisy = dx1 + random.normal(0, 1) * parameter['sigmaX']
-    dx2_noisy = dx2 + random.normal(0, 1) * parameter['sigmaX']
-    dx3_noisy = dx3 + random.normal(0, 1) * parameter['sigmaX']
     
-    return [
-        dx1_noisy * dt + x[0], 
-        dx2_noisy * dt + x[1], 
-        dx3_noisy * dt + x[2]
-    ]
+def getThreeTankEquations(param=parameter):
+    '''
+    TODO: this way parameters are defined inside the module and can't be changed.
+        - create something like a three Tank object, which 
+            creates a class inside and 
+            exposes the class methods as function with the different interface
+    '''
+
+    threeTank  = ThreeTank(param)
+
+    '''
+    nonlinear state transition for the three tank system
+    returns the next state vector for the given state vector x and time step dt
+    this is used by filterPy
+    TODO: One should give the option for different solvers like RK45 (this is one step euler method)
+    '''
+    def stateTransition(x, dt):
+        dx = threeTank.stateTransition(0,x)
+        return np.add(x, np.multiply(dx, dt))
+
+    '''
+    nonlinear state transition for the three tank system
+    returns the observation for the given state vector x
+    this is used by filterPy
+    '''
+    def observation(x):
+        return threeTank.observation(x)
     
-def observation(x):
-    y1 = x[0] + random.normal(0, 1) * parameter['sigmaY']
-    y2 = x[1] + random.normal(0, 1) * parameter['sigmaY']
-    y3 = x[2] + random.normal(0, 1) * parameter['sigmaY']
-    return [y1 , y2, y3]
+    return stateTransition, observation
