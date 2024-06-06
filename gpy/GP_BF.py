@@ -3,6 +3,7 @@ from filterpy.kalman import UnscentedKalmanFilter
 import numpy as np
 import GPy
 
+#TODO make a parent class for GP_SSM and GP_SSM2 so that i am forced to implement the same methods (like normalize and denormalize)
 class GP_SSM():
     def __init__(self, dx, y, n, l=1, sigma=1, sigmaY=1):
         kernel_list  = []
@@ -27,7 +28,7 @@ class GP_SSM():
         self.sigma = sigma
         self.sigmaY = sigmaY
         self.n = n
-
+        
         self.gp_ssm = GPy.models.MultioutputGP(
             X_list=X_list,
             Y_list=Y_list,
@@ -51,6 +52,75 @@ class GP_SSM():
         mu, var = self.gp_ssm.predict_noiseless(Xnew=[x]*self.n)
 
         Q = np.diagflat(var)
+        #TODO: is this correct or what should I do with dt?
+        return Q
+    
+
+class GP_SSM2():
+    '''
+    This is a wrapper for a state space system for the GPMultioutRegression class in GPy which is an implementation of Latent Variable Multiple Output Gaussian Processes (LVMOGP) in [Dai_et_al_2017]
+    Dai, Z.; Alvarez, M.A.; Lawrence, N.D: Efficient Modeling of Latent Information in Supervised Learning using Gaussian Processes. In NIPS, 2017.
+
+    https://gpy.readthedocs.io/en/deploy/GPy.models.html#module-GPy.models.gp_multiout_regression
+
+    Be careful with the notations:
+    - I still use the notation where D is the number of samples and n is the state and measurement dimension
+    - In the paper however, they use D for the number of outputs (different conditions) and N for the number of samples
+
+    param dx: shape(D, n) where D is the number of samples and n is the output dimension
+    param y: shape(D, n) where D is the number of samples and n is the output dimension
+    '''
+    def __init__(self, dx, y, n, l=1, sigma=1, sigmaY=1):
+
+        self.l = l
+        self.sigma = sigma
+        self.sigmaY = sigmaY
+        self.n = n
+
+        D = n #   should be equal to y.shape[1] #output dimension
+        Mr = D
+        Mc = y.shape[0] #number of samples
+
+        # WATCH OUT: latent dimension can have a tremendous impact on the performance (Qr=5 with threeTank guessed same Value for all states)
+        Qr = 3
+        Qc = y.shape[1] # input dimension
+
+        #normalize
+        self.dxMean = dx.mean(axis=0)
+        self.dxStd = dx.std(axis=0)
+
+        self.yMean = y.mean(axis=0)
+        self.yStd = y.std(axis=0)
+
+        dxNorm = (dx - self.dxMean) / self.dxStd
+        yNorm = (y - self.yMean) / self.yStd
+
+        self.gp_ssm = GPy.models.GPMultioutRegression(
+            yNorm,
+            dxNorm,
+            Xr_dim=Qr, 
+            kernel_row=GPy.kern.RBF(Qr,ARD=True), #TODO what is ARD doing 
+            num_inducing=(Mc,Mr),
+            init='GP'
+        )        
+
+    def optimize(self, msg=0, ipynb=False):
+        self.gp_ssm.optimize_auto()
+
+    #TODO predict returns mean and variance but we only need one at a time. 
+
+    def stateTransition(self, xIn, dt):
+        x = np.array([xIn]) # a 2D array is expected so we need to wrap it in another array
+        xNorm = (x - self.yMean) / self.yStd
+        mu, var = self.gp_ssm.predict_noiseless(Xnew=xNorm) #:type Xnew : np.ndarray (1,stateN)
+        dx = mu * self.dxStd + self.dxMean
+        return np.add(x, np.multiply(dx, dt))
+    
+    def stateTransitionVariance(self, xIn):
+        xNorm = (np.array([xIn])-self.yMean) / self.yStd 
+        mu, var = self.gp_ssm.predict_noiseless(Xnew=xNorm)
+
+        Q = np.diagflat(var* self.dxStd + self.dxMean)
         #TODO: is this correct or what should I do with dt?
         return Q
 

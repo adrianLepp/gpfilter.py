@@ -51,13 +51,6 @@ class ThreeTank():
         return [y1 , y2, y3]
     
 def getThreeTankEquations(param=parameter):
-    '''
-    TODO: this way parameters are defined inside the module and can't be changed.
-        - create something like a three Tank object, which 
-            creates a class inside and 
-            exposes the class methods as function with the different interface
-    '''
-
     threeTank  = ThreeTank(param)
 
     '''
