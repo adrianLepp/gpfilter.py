@@ -13,17 +13,10 @@ def simulateNonlinearSSM(system, x0, dt, tFinal):
     y = np.zeros((3,len(ts)))
     dx = np.zeros((3,len(ts)))
     xPrev = x0
+    #dx = np.diff(x)
     for i in range(len(ts)):
         y[:,i] = system.observation(x[:,i]) 
         dx[:,i] = (x[:,i]-xPrev)
         xPrev = x[:,i]
 
     return x, y, dx, ts
-
-def create_function(param):
-    def inner_function(arg1, arg2):
-        # Do something with param, arg1, and arg2
-        # ...
-        return 1
-    
-    return inner_function

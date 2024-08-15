@@ -1,6 +1,5 @@
 
 from filterpy.kalman import UnscentedKalmanFilter
-from filterpy.common import Q_discrete_white_noise
 import numpy as np
 import GPy
 import torch
@@ -227,8 +226,9 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
             
         #TODO dont use forward but single functions instead
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
-            predictions = self.likelihood(self.gp(torch.tensor(x).float()))
-            dx = predictions.mean.numpy()
+            dx = self.gp.mean_module(torch.tensor(x).float()).numpy()
+            # predictions = self.likelihood(self.gp(torch.tensor(x).float()))
+            # dx = predictions.mean.numpy()
         
         dx = self.denormalize(dx, self.norm_param_y)
         return np.add(xIn, np.multiply(dx, dt))
@@ -239,56 +239,15 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
         
         #TODO dont use forward but single functions instead
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
-            predictions = self.likelihood(self.gp(torch.tensor(x).float()))
-            var = predictions.stddev.numpy()
+            var = self.gp.covar_module(torch.tensor(x).float()).numpy()
+            # predictions = self.likelihood(self.gp(torch.tensor(x).float()))
+            # var = predictions.stddev.numpy()
 
         var = self.denormalize(var, self.norm_param_y)
         Q = np.diagflat(var)
         #TODO: is this correct or what should I do with dt?
+        return var #TODO: this is not the rifht thing to do
         return Q
-
-    # def stateTransition(self, xIn, dt):
-    #     x = np.array([xIn]) # a 2D array is expected so we need to wrap it in another array
-        
-    #     #var 1
-    #     #xNorm = (x - self.yMean) / self.yStd
-        
-    #     #var 2
-    #     xNorm = (torch.tensor(x) - self.x_min) / (self.x_max - self.x_min)
-        
-    #     with torch.no_grad(), gpytorch.settings.fast_pred_var():
-
-    #         predictions = self.likelihood(self.gp(torch.tensor(xNorm).float()))
-    #         mean = np.abs(predictions.mean)
-    #         #var = predictions.stddev()
-    #         #lower, upper = predictions.confidence_region()
-        
-    #     #dx = mean.numpy() * self.dxStd + self.dxMean #var1
-    #     dx = denormalize_data(mean, self.y_min, self.y_max).numpy() #var2
-    #     return np.add(x, np.multiply(dx, dt))
-    
-    # def stateTransitionVariance(self, xIn):
-    #     #var 1
-    #     #xNorm = (np.array([xIn])-self.yMean) / self.yStd 
-        
-    #     #var 2
-    #     x = np.array([xIn])
-    #     xNorm = (torch.tensor(x) - self.x_min) / (self.x_max - self.x_min)
-        
-    #     with torch.no_grad(), gpytorch.settings.fast_pred_var():
-
-    #         predictions = self.likelihood(self.gp(torch.tensor(xNorm).float()))
-    #         #mean = predictions.mean
-    #         var = np.abs(predictions.stddev)
-
-    #     #Q = np.diagflat(var.numpy()* self.dxStd + self.dxMean) # var1
-        
-    #     Q = np.diagflat(denormalize_data(var, self.y_min, self.y_max)).numpy() # var2
-        
-        
-        # #Q = Q_discrete_white_noise(dim=self.n, var=1e-7**2, block_size=self.n)
-        # #TODO: is this correct or what should I do with dt?
-        # return Q
 
 
 class GP_UKF(UnscentedKalmanFilter):
@@ -313,23 +272,6 @@ class GP_UKF(UnscentedKalmanFilter):
 
         super().predict(dt, UT, fx)
 
-def init_GP_UKF(x, fx, hx , points, Qfct, P, R, Q, dt):
-    dim_x = x.shape[0]
-    dim_z = R.shape[0]
-
-    gp_ukf = GP_UKF(dim_x=dim_x, dim_z=dim_z, dt=dt, fx=fx, hx=hx, Qfct=Qfct, points=points)
-    #              sqrt_fn=None, x_mean_fn=None, z_mean_fn=None,
-    #              residual_x=None,
-    #              residual_z=None,
-    #              state_add=None)
-
-    gp_ukf.x = x
-    gp_ukf.P *= P 
-    gp_ukf.R = R 
-    gp_ukf.Q = Q
-
-    return gp_ukf
-
 
 '''
 TODO: this is almost a duplicate from https://docs.gpytorch.ai/en/stable/examples/03_Multitask_Exact_GPs/Multitask_GP_Regression.html
@@ -348,4 +290,3 @@ class MultitaskGPModel(gpytorch.models.ExactGP):
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultitaskMultivariateNormal(mean_x, covar_x)
-    

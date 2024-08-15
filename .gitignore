@@ -1,2 +1,5 @@
 **/__pycache__
 .vscode
+*.ini
+*.ini.bak
+*.spydata
