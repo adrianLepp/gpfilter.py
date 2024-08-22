@@ -23,7 +23,7 @@ NORMALIZE = True
 OPTIM_STEPS = 1
 
 
-gp_model = GP_SSM_gpy_LVMOGP
+gp_model = GP_SSM_gpytorch_multitask
 
 # %%
 
@@ -43,7 +43,7 @@ param2['c2R'] = param['c2R'] * 2
 
 metaParams = [
     {'T':100, 'downsample':1}, 
-    {'T':500, 'downsample':5}
+    {'T':100, 'downsample':1}
 ]
 
 params = [param, param2]
@@ -74,6 +74,10 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
             models = []
             for i in range(modeN):
                 models.append(gp_model(dxD[i].transpose(), yD[i].transpose(), stateN, normalize=NORMALIZE))
+                
+                # for param_name, param in models[0].gp.named_parameters():
+                #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
+                
                 models[i].optimize(OPTIM_STEPS)
         
                 filters.append(init_GP_UKF(x0, models[i].stateTransition, observation, stateN, models[i].stateTransitionVariance,P, z_std, dt))
@@ -85,15 +89,15 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
                 filters.append(init_UKF(x0, stateTransition, observation,stateN, x_std, P, z_std, dt))
 
         immUkf = IMMEstimator(filters, mu, trans)
-        return immUkf
+        return immUkf, models
 
     else:
         model = gp_model(dxD.transpose(), yD.transpose(), stateN, normalize=NORMALIZE)
         model.optimize(OPTIM_STEPS)
         gp_filter  = init_GP_UKF(x0, model.stateTransition, observation, stateN, model.stateTransitionVariance,P, z_std, dt)
-        return gp_filter
+        return gp_filter, model
 
-filter = createFilter(modeN, x_std, z_std, P, mu , trans, observation)
+filter, model = createFilter(modeN, x_std, z_std, P, mu , trans, observation)
     
 
 
@@ -153,4 +157,17 @@ dxSim = np.concatenate((dxSim, dxSim2), axis=1)
 zValues =  ySim
 
 runPrediction(stateN, modeN, filter, T, zValues)
+
+# %%
+# gp_param = []
+# for param_name, param in model[1].gp.named_parameters():
+#     print(f'Parameter name: {param_name:42} value = {param.data}')
+    
+    
+#     constraint = model[1].gp[param_name + '_constrained']
+    #constraint.transform(param)
+    #gp_param.append((param_name,param))
+    #print(f'Parameter name: {param_name:42} value = {param.data}')
+    
+
 

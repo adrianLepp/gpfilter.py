@@ -53,11 +53,6 @@ class GP_SSM(ABC):
         
 '''
 Simple Multioutput GP from the library gpy
-
-
-TODO: adjust parameter for different kernel and likelihood
-TODO: normalization
-
 '''
 class GP_SSM_gpy_multiout(GP_SSM):
     def __init__(self, dxData:np.ndarray, yData:np.ndarray, n:int, normalize=False, 
@@ -224,7 +219,6 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
         xIn = np.array([xIn])
         x = self.normalize(xIn, self.norm_param_x)
             
-        #TODO dont use forward but single functions instead
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
             dx = self.gp.mean_module(torch.tensor(x).float()).numpy()
             # predictions = self.likelihood(self.gp(torch.tensor(x).float()))
@@ -237,7 +231,6 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
         xIn = np.array([xIn])
         x = self.normalize(xIn, self.norm_param_x)
         
-        #TODO dont use forward but single functions instead
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
             var = self.gp.covar_module(torch.tensor(x).float()).numpy()
             # predictions = self.likelihood(self.gp(torch.tensor(x).float()))
@@ -251,20 +244,9 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
 
 
 class GP_UKF(UnscentedKalmanFilter):
-    #TODO: **args?
-    def __init__(self, dim_x, dim_z, dt, hx, fx, points, Qfct,
-        # sqrt_fn=None, x_mean_fn=None, z_mean_fn=None,
-        # residual_x=None,
-        # residual_z=None,
-        # state_add=None
-        ):
+    def __init__(self, dim_x, dim_z, dt, hx, fx, points, Qfct):
 
-        super().__init__(dim_x, dim_z, dt, hx, fx, points,
-            # sqrt_fn, x_mean_fn, z_mean_fn,
-            # residual_x,
-            # residual_z,
-            # state_add
-            )
+        super().__init__(dim_x, dim_z, dt, hx, fx, points)
         self.Qfct = Qfct
     
     def predict(self, dt=None, UT=None, fx=None, **fx_args):
