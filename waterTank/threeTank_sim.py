@@ -9,7 +9,7 @@ from filterpy.kalman import IMMEstimator
 import numpy as np
 import matplotlib.pyplot as plt
 from threeTank import getThreeTankEquations, ThreeTank, parameter as param
-from GP_BF import GP_SSM_gpy_multiout, GP_SSM_gpy_LVMOGP, GP_SSM_gpytorch_multitask, BatchIndependentMultitaskGPModel, MultitaskGPModel
+from GP_BF import GP_SSM_gpy_multiout, GP_SSM_gpy_LVMOGP, GP_SSM_gpytorch_multitask, BatchIndependentMultitaskGPModel, MultitaskGPModel, ConvolvedGPModel
 from helper import init_GP_UKF, init_UKF, createTrainingData
 import pandas as pd
 import json
@@ -25,11 +25,11 @@ GP = True
 SAVE = False
 
 NORMALIZE = True
-OPTIM_STEPS = 100
+OPTIM_STEPS = 20
 
 
 gp_model = GP_SSM_gpytorch_multitask
-gp_type =  BatchIndependentMultitaskGPModel # MultitaskGPModel # 
+gp_type =  ConvolvedGPModel # MultitaskGPModel #  BatchIndependentMultitaskGPModel #  
 
 # %%
 
