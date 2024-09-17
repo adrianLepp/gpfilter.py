@@ -10,60 +10,6 @@ this will become a lib once
 """
 import torch
 import numpy as np
-from dynamicSystem import simulateNonlinearSSM
-import matplotlib.pyplot as plt
-
-
-# %%
-def createTrainingData(system, paramSets, metaParams, stateN, dt, x0, multipleSets=False):
-    yD = []
-    dxD = []
-    xD = []
-    tsD = []
-    T = 0
-    
-    for param, metaParam in zip(paramSets, metaParams):
-        if not metaParam['downsample']:
-            metaParam['downsample'] = 1
-
-        xData, yData, dxData, tsData = simulateNonlinearSSM(system(param), x0, dt, metaParam['T'])
-
-        tsData += T
-        T = tsData[-1]
-        x0 = xData[:, -1]
-
-        xD.append(xData[:, ::metaParam['downsample']])
-        yD.append(yData[:, ::metaParam['downsample']])
-        dxD.append(dxData[:, ::metaParam['downsample']])
-        tsD.append(tsData[::metaParam['downsample']])
-
-    xData = np.concatenate((xD), axis=1)
-    yData = np.concatenate((yD), axis=1)
-    dxData = np.concatenate((dxD), axis=1)
-    tsData = np.concatenate((tsD))
-
-    #with plt.ion():
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6))
-
-    for i in range(stateN):
-        ax1.plot(tsData, yData[i], label='y' + str(i))
-    ax1.set_xlabel('t')
-    ax1.set_ylabel('y')
-    ax1.legend()
-
-    for i in range(stateN):
-        ax2.plot(tsData, dxData[i], label='dx' + str(i))
-    ax2.set_xlabel('t')
-    ax2.set_ylabel('dx')
-    ax2.legend()
-
-    plt.tight_layout()
-    plt.show()
-
-    if multipleSets:
-        return xD, yD, dxD, tsD
-    else:
-        return xData, yData, dxData, tsData
 
 
 # %% mean std

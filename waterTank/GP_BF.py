@@ -9,6 +9,44 @@ from util import normalize_min_max_np, normalize_min_max_torch, denormalize_min_
 
 DEBUG = False
 
+
+class MultitaskGPModel(gpytorch.models.ExactGP):
+    '''
+    TODO: this is ALMOST a duplicate from https://docs.gpytorch.ai/en/stable/examples/03_Multitask_Exact_GPs/Multitask_GP_Regression.html
+    '''
+    def __init__(self, train_x, train_y, likelihood, num_tasks):
+        super(MultitaskGPModel, self).__init__(train_x, train_y, likelihood)
+        self.mean_module = gpytorch.means.MultitaskMean(
+            gpytorch.means.ConstantMean(), num_tasks=num_tasks
+        )
+        self.covar_module = gpytorch.kernels.MultitaskKernel(
+            gpytorch.kernels.RBFKernel(), num_tasks=num_tasks, rank=1
+        )
+
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultitaskMultivariateNormal(mean_x, covar_x)
+    
+class BatchIndependentMultitaskGPModel(gpytorch.models.ExactGP):
+    '''
+    TODO: this is ALMOST a duplicate from https://docs.gpytorch.ai/en/stable/examples/03_Multitask_Exact_GPs/Multitask_GP_Regression.html
+    '''
+    def __init__(self, train_x, train_y, likelihood, num_tasks):
+        super().__init__(train_x, train_y, likelihood)
+        self.mean_module = gpytorch.means.ConstantMean(batch_shape=torch.Size([num_tasks]))
+        self.covar_module = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(batch_shape=torch.Size([num_tasks])),
+            batch_shape=torch.Size([num_tasks])
+        )
+
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultitaskMultivariateNormal.from_batch_mvn(
+            gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+        )
+
 class GP_SSM(ABC):
     
     def __init__(self, dxData, yData, n, normalize):
@@ -31,7 +69,7 @@ class GP_SSM(ABC):
 
     
     @abstractmethod
-    def optimize(self):
+    def optimize(self, iterations:int, verbose:bool):
         pass
     @abstractmethod
     def stateTransition(self, xIn, dt):
@@ -181,6 +219,7 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
     def __init__(self, dxData:np.ndarray, yData:np.ndarray, n:int, normalize=False, 
                  kern=None, 
                  likelihood=gpytorch.likelihoods.MultitaskGaussianLikelihood,
+                 model= MultitaskGPModel
     ):
         super().__init__(dxData, yData, n, normalize)
         
@@ -188,7 +227,7 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
         self.y_train = torch.tensor(self.y_train).float()
         
         self.likelihood = likelihood(num_tasks=self.n)
-        self.gp = MultitaskGPModel(self.x_train , self.y_train , self.likelihood, num_tasks=self.n)
+        self.gp = model(self.x_train , self.y_train , self.likelihood, num_tasks=self.n)
         
     '''
     TODO: this can be used general for all gpytorch models (move out of class)
@@ -224,6 +263,9 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
             # predictions = self.likelihood(self.gp(torch.tensor(x).float()))
             # dx = predictions.mean.numpy()
         
+        if dx.shape[1] == 1:
+            dx = dx.transpose()
+        
         dx = self.denormalize(dx, self.norm_param_y)
         return np.add(xIn, np.multiply(dx, dt))
     
@@ -236,11 +278,13 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
             # predictions = self.likelihood(self.gp(torch.tensor(x).float()))
             # var = predictions.stddev.numpy()
 
+        if var.shape[1] == 1:
+            var = np.diagflat(var)
         var = self.denormalize(var, self.norm_param_y)
-        Q = np.diagflat(var)
+        
         #TODO: is this correct or what should I do with dt?
-        return var #TODO: this is not the rifht thing to do
-        return Q
+        return var
+        return np.abs(var) #TODO: this is not the rifht thing to do
 
 
 class GP_UKF(UnscentedKalmanFilter):
@@ -253,22 +297,3 @@ class GP_UKF(UnscentedKalmanFilter):
         self.Q = self.Qfct(self.sigmas_f[0,:])
 
         super().predict(dt, UT, fx)
-
-
-'''
-TODO: this is almost a duplicate from https://docs.gpytorch.ai/en/stable/examples/03_Multitask_Exact_GPs/Multitask_GP_Regression.html
-'''
-class MultitaskGPModel(gpytorch.models.ExactGP):
-    def __init__(self, train_x, train_y, likelihood, num_tasks):
-        super(MultitaskGPModel, self).__init__(train_x, train_y, likelihood)
-        self.mean_module = gpytorch.means.MultitaskMean(
-            gpytorch.means.ConstantMean(), num_tasks=num_tasks
-        )
-        self.covar_module = gpytorch.kernels.MultitaskKernel(
-            gpytorch.kernels.RBFKernel(), num_tasks=num_tasks, rank=1
-        )
-
-    def forward(self, x):
-        mean_x = self.mean_module(x)
-        covar_x = self.covar_module(x)
-        return gpytorch.distributions.MultitaskMultivariateNormal(mean_x, covar_x)
