@@ -269,6 +269,19 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
         dx = self.denormalize(dx, self.norm_param_y)
         return np.add(xIn, np.multiply(dx, dt))
     
+    def stateTransitionDx(self, t, xIn):
+        xIn = np.array([xIn])
+        x = self.normalize(xIn, self.norm_param_x)
+            
+        with torch.no_grad(), gpytorch.settings.fast_pred_var():
+            dx = self.gp.mean_module(torch.tensor(x).float()).numpy()
+        
+        if dx.shape[1] == 1:
+            dx = dx.transpose()
+        
+        dx = self.denormalize(dx, self.norm_param_y)
+        return dx
+    
     def stateTransitionVariance(self, xIn):
         xIn = np.array([xIn])
         x = self.normalize(xIn, self.norm_param_x)
