@@ -49,7 +49,7 @@ class BatchIndependentMultitaskGPModel(gpytorch.models.ExactGP):
 
 class GP_SSM(ABC):
     
-    def __init__(self, dxData, yData, n, normalize):
+    def __init__(self, xDataK, xDataKK, n, normalize):
         self.n = n
         self.norm_param_x = None
         self.norm_param_y = None
@@ -61,11 +61,11 @@ class GP_SSM(ABC):
             self.normFct = normalize_min_max_np
             self.denormFct = denormalize_min_max
             
-            self.x_train, self.norm_param_x =  self.normFct(yData)
-            self.y_train, self.norm_param_y =  self.normFct(dxData)
+            self.x_train, self.norm_param_x =  self.normFct(xDataK)
+            self.y_train, self.norm_param_y =  self.normFct(xDataKK)
         else:
-            self.x_train = yData
-            self.y_train = dxData
+            self.x_train = xDataK
+            self.y_train = xDataKK
 
     
     @abstractmethod
@@ -216,12 +216,12 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
     param dx: shape(D, n) where D is the number of samples and n is the output dimension
     param y: shape(D, n) where D is the number of samples and n is the output dimension
     '''
-    def __init__(self, dxData:np.ndarray, yData:np.ndarray, n:int, normalize=False, 
+    def __init__(self, xDataK:np.ndarray, xDataKK:np.ndarray, n:int, normalize=False, 
                  kern=None, 
                  likelihood=gpytorch.likelihoods.MultitaskGaussianLikelihood,
                  model= MultitaskGPModel
     ):
-        super().__init__(dxData, yData, n, normalize)
+        super().__init__(xDataK, xDataKK, n, normalize)
         
         self.x_train = torch.tensor(self.x_train).float()
         self.y_train = torch.tensor(self.y_train).float()
@@ -259,15 +259,16 @@ class GP_SSM_gpytorch_multitask(GP_SSM):
         x = self.normalize(xIn, self.norm_param_x)
             
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
-            dx = self.gp.mean_module(torch.tensor(x).float()).numpy()
+            xKK = self.gp.mean_module(torch.tensor(x).float()).numpy()
             # predictions = self.likelihood(self.gp(torch.tensor(x).float()))
             # dx = predictions.mean.numpy()
         
-        if dx.shape[1] == 1:
-            dx = dx.transpose()
+        if xKK.shape[1] == 1:
+            xKK = xKK.transpose()
         
-        dx = self.denormalize(dx, self.norm_param_y)
-        return np.add(xIn, np.multiply(dx, dt))
+        xKK = self.denormalize(xKK, self.norm_param_y)
+        return xKK
+        #return np.add(xIn, np.multiply(dx, dt))
     
     def stateTransitionVariance(self, xIn):
         xIn = np.array([xIn])

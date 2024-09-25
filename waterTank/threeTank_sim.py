@@ -17,15 +17,15 @@ import json
 stateTransition, observation = getThreeTankEquations()
 # %%
 
-simCounter = 5
+simCounter = 11
 
 verbose = True
-MULTI_MODEL = True
+MULTI_MODEL = False
 GP = True
 SAVE = False
 
 NORMALIZE = True
-OPTIM_STEPS = 100
+OPTIM_STEPS = 1
 
 
 gp_model = GP_SSM_gpytorch_multitask
@@ -61,16 +61,21 @@ param2['c2R'] = param['c2R'] * 4
 param2['u'] = 0
 
 metaParams = [
-    {'T':100, 'downsample':100}, 
-    {'T':100, 'downsample':100}
+    {'T':100, 'downsample':1}, 
+#    {'T':100, 'downsample':100}
 ]
 
-params = [param, param2]
+params = [
+    param, 
+#    param2
+]
 #params = [param]
 
 
 if GP:
-    xD, yD, dxD, tsD = createTrainingData(ThreeTank, params, metaParams, stateN, dt, x0, multipleSets=MULTI_MODEL)
+    xDk, xDkk, tsD = createTrainingData(ThreeTank, params, metaParams, stateN, dt, x0, multipleSets=MULTI_MODEL, outIsTransition=False)
+    #xD, yD, dxD, tsD = createTrainingData(ThreeTank, params, metaParams, stateN, dt, x0, multipleSets=MULTI_MODEL, outIsTransition=False)
+
 
 # %%
 
@@ -108,7 +113,7 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
         if GP:
             
             for i in range(modeN):
-                models.append(gp_model(dxD[i].transpose(), yD[i].transpose(), stateN, normalize=NORMALIZE, model=gp_type))
+                models.append(gp_model(xDk[i].transpose(), xDkk[i].transpose(), stateN, normalize=NORMALIZE, model=gp_type))
                 
                 # for param_name, param in models[0].gp.named_parameters():
                 #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
@@ -126,7 +131,7 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
         return immUkf, models
 
     else:
-        model = gp_model(dxD.transpose(), yD.transpose(), stateN, normalize=NORMALIZE, model=gp_type)
+        model = gp_model(xDk.transpose(), xDkk.transpose(), stateN, normalize=NORMALIZE, model=gp_type)
         model.optimize(OPTIM_STEPS, verbose)
         gp_filter  = init_GP_UKF(x0, model.stateTransition, observation, stateN, model.stateTransitionVariance,P, z_std, dt)
         return gp_filter, model
