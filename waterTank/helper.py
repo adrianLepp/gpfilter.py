@@ -5,7 +5,6 @@ import numpy as np
 from GP_BF import GP_UKF
 from dynamicSystem import simulateNonlinearSSM
 import matplotlib.pyplot as plt
-from plotConfig import set_size
 
 #plt.style.use('seaborn')
 #plt.style.use('tex')
@@ -16,15 +15,13 @@ textWidth= 469.4704
 # init Filters
 #------------------------------------------------------------------------------
 
-def init_GP_UKF(x, fx, hx, n , Qfct, P, z_std, dt, alpha=.1, beta=2., kappa=-1):
-    dim_x = x.shape[0]
-    dim_z = x.shape[0]
-    R = np.diag([z_std**2] * n)
+def init_GP_UKF(x, fx, hx, n ,m,  Qfct, P, z_std, dt, alpha=.1, beta=2., kappa=-1):
+    R = np.diag([z_std**2] * m)
 
     # create sigma points to use in the filter. This is standard for Gaussian processes
     points = MerweScaledSigmaPoints(n, alpha, beta, kappa)
 
-    gp_ukf = GP_UKF(dim_x=dim_x, dim_z=dim_z, dt=dt, fx=fx, hx=hx, Qfct=Qfct, points=points)
+    gp_ukf = GP_UKF(dim_x=n, dim_z=m, dt=dt, fx=fx, hx=hx, Qfct=Qfct, points=points)
     #              sqrt_fn=None, x_mean_fn=None, z_mean_fn=None,
     #              residual_x=None,
     #              residual_z=None,
@@ -37,13 +34,11 @@ def init_GP_UKF(x, fx, hx, n , Qfct, P, z_std, dt, alpha=.1, beta=2., kappa=-1):
 
     return gp_ukf
 
-def init_UKF(x, fx, hx , n, x_std, P, z_std, dt, alpha=.1, beta=2., kappa=-1):
-    dim_x = x.shape[0]
-    dim_z = x.shape[0]
-    R = np.diag([z_std**2] * n)
+def init_UKF(x, fx, hx , n, m,  x_std, P, z_std, dt, alpha=.1, beta=2., kappa=-1):
+    R = np.diag([z_std**2] * m)
     points = MerweScaledSigmaPoints(n, alpha, beta, kappa)
 
-    ukf = UnscentedKalmanFilter(dim_x=dim_x, dim_z=dim_z, dt=dt, fx=fx, hx=hx, points=points)
+    ukf = UnscentedKalmanFilter(dim_x=n, dim_z=m, dt=dt, fx=fx, hx=hx, points=points)
 
     ukf.x = x
     ukf.P *= P 

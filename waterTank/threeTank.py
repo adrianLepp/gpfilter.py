@@ -47,13 +47,22 @@ class ThreeTank():
         
         return [dx1_noisy, dx2_noisy, dx3_noisy]
     
-    def observation(self, x):
-        y1 = x[0] + random.normal(0, 1) * self.sigmaY
-        y2 = x[1] + random.normal(0, 1) * self.sigmaY
-        y3 = x[2] + random.normal(0, 1) * self.sigmaY
-        return [y1 , y2, y3]
+    def observation(self, x, observe = (True, True, True)):
+        y = []
+        for i in range(0, len(x)):
+            if observe[i]:
+                y.append(x[i] + random.normal(0, 1) * self.sigmaY)
+        if len(y) == 0:
+            return [x[0] + x[1] + x[2] + random.normal(0, 1) * self.sigmaY ]
+        # y1 = x[0] + random.normal(0, 1) * self.sigmaY
+        # y2 = x[1] + random.normal(0, 1) * self.sigmaY
+        # y3 = x[2] + random.normal(0, 1) * self.sigmaY
+        # return [y1 , y2, y3]
+
+        return y
     
-def getThreeTankEquations(param=parameter):
+    
+def getThreeTankEquations(param=parameter, observe= (True, True, True)):
     threeTank  = ThreeTank(param)
 
     '''
@@ -72,7 +81,7 @@ def getThreeTankEquations(param=parameter):
     this is used by filterPy
     '''
     def observation(x):
-        return threeTank.observation(x)
+        return threeTank.observation(x, observe)
     
     return stateTransition, observation
 

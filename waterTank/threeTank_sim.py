@@ -14,22 +14,22 @@ from helper import init_GP_UKF, init_UKF, createTrainingData
 import pandas as pd
 import json
 
-stateTransition, observation = getThreeTankEquations()
+stateTransition, observation = getThreeTankEquations(param, observe= (False, False, False))
 # %%
 
-simCounter = 5
+simCounter = 11
 
 verbose = True
-MULTI_MODEL = True
+MULTI_MODEL = False
 GP = True
 SAVE = False
 
 NORMALIZE = True
-OPTIM_STEPS = 100
+OPTIM_STEPS = 500
 
 
 gp_model = GP_SSM_gpytorch_multitask
-gp_type =  BatchIndependentMultitaskGPModel # MultitaskGPModel # 
+gp_type =  MultitaskGPModel # BatchIndependentMultitaskGPModel #  
 
 # %%
 
@@ -38,6 +38,7 @@ gp_type =  BatchIndependentMultitaskGPModel # MultitaskGPModel #
 #------------------------------------------------------------------------------
 
 stateN = 3
+measN = 1
 x0 = np.zeros(stateN) # initial state
 dt = 0.1
 
@@ -45,9 +46,9 @@ dt = 0.1
 alpha=.1
 beta=2.
 kappa=-1
-z_std = 1e-5
-x_std = 1e-7
-P = 1e-7 # initial uncertainty
+z_std = 5*1e-7
+x_std = 1e-9
+P = 1e-9 # initial uncertainty
 
 #IMMM
 modeN = 2
@@ -61,11 +62,14 @@ param2['c2R'] = param['c2R'] * 4
 param2['u'] = 0
 
 metaParams = [
-    {'T':100, 'downsample':100}, 
-    {'T':100, 'downsample':100}
+#    {'T':100, 'downsample':100}, 
+    {'T':100, 'downsample':10}
 ]
 
-params = [param, param2]
+params = [
+    param, 
+#    param2
+]
 #params = [param]
 
 
@@ -108,14 +112,14 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
         if GP:
             
             for i in range(modeN):
-                models.append(gp_model(dxD[i].transpose(), yD[i].transpose(), stateN, normalize=NORMALIZE, model=gp_type))
+                models.append(gp_model(dxD[i].transpose(), xD[i].transpose(), stateN, normalize=NORMALIZE, model=gp_type))
                 
                 # for param_name, param in models[0].gp.named_parameters():
                 #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
                 
                 models[i].optimize(OPTIM_STEPS, verbose)
         
-                filters.append(init_GP_UKF(x0, models[i].stateTransition, observation, stateN, models[i].stateTransitionVariance,P, z_std, dt))
+                filters.append(init_GP_UKF(x0, models[i].stateTransition, observation, stateN, measN, models[i].stateTransitionVariance,P, z_std, dt))
         
         else:
             for i in range(modeN):
@@ -126,9 +130,9 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
         return immUkf, models
 
     else:
-        model = gp_model(dxD.transpose(), yD.transpose(), stateN, normalize=NORMALIZE, model=gp_type)
+        model = gp_model(dxD.transpose(), xD.transpose(), stateN, normalize=NORMALIZE, model=gp_type)
         model.optimize(OPTIM_STEPS, verbose)
-        gp_filter  = init_GP_UKF(x0, model.stateTransition, observation, stateN, model.stateTransitionVariance,P, z_std, dt)
+        gp_filter  = init_GP_UKF(x0, model.stateTransition, observation, stateN, measN, model.stateTransitionVariance,P, z_std, dt)
         return gp_filter, model
 
 filter, model = createFilter(modeN, x_std, z_std, P, mu , trans, observation)
@@ -189,6 +193,7 @@ def runPrediction(stateN, modeN, filter, zValues:np.ndarray, time:np.ndarray):
     simLength = time.shape[0]#  shape[1]
     xValues = np.zeros(shape)
     errorValues = np.zeros(shape)
+    likelihoodValues = np.zeros(shape)
     varianceValues = np.zeros(shape)
     if MULTI_MODEL:
         muValues = np.zeros((modeN,simLength))
@@ -196,7 +201,8 @@ def runPrediction(stateN, modeN, filter, zValues:np.ndarray, time:np.ndarray):
     for i in range(simLength):
         # perform predict/update cycle
         filter.predict()
-        filter.update(zValues[:,i])
+        meas = zValues[0,i] + zValues[1,i] + zValues[2,i] 
+        filter.update(meas)#TODO change this
 
         if MULTI_MODEL:
             muValues[:,i] = filter.mu
@@ -204,23 +210,30 @@ def runPrediction(stateN, modeN, filter, zValues:np.ndarray, time:np.ndarray):
         xValues[:,i] = filter.x
         errorValues[:,i] = np.abs(filter.x - zValues[:,i])
         varianceValues[:,i] = np.diag(filter.P_post)
+        likelihoodValues[:,i] = filter.likelihood
 
     lower_bound = xValues - 1.96 * np.sqrt(varianceValues)
     upper_bound = xValues + 1.96 * np.sqrt(varianceValues)
 
-    plt.figure()
+    fig, ax = plt.subplots(2, 2, figsize=(10, 10))
     for i in range(stateN):
-        plt.plot(time, zValues[i, :], label='$z_' + str(i) + '$')
-        plt.plot(time, xValues[i, :], '--', label='$x_' + str(i) + '$')
-        plt.fill_between(time, lower_bound[i, :], upper_bound[i, :], color='gray', alpha=0.5, label='$95\%$ CI' if i == 0 else "")
-    plt.legend()
+        ax[0,0].plot(time, zValues[i, :], label='$z_' + str(i) + '$')
+        ax[0,0].plot(time, xValues[i, :], '--', label='$x_' + str(i) + '$')
+        ax[0,0].fill_between(time, lower_bound[i, :], upper_bound[i, :], color='gray', alpha=0.5, label='$95\%$ CI' if i == 0 else "")
+    ax[0,0].legend()
+
+    for i in range(stateN):
+        ax[0,1].plot(time, errorValues[i, :], label='$error_' + str(i) + '$')
+    ax[0,1].legend()
+
+    ax[1,0].plot(time, likelihoodValues[0,:], label='likelihood')
+    ax[1,0].legend()
 
     if MULTI_MODEL:
-        plt.figure()
-        #fig2, ax2 = plt.subplots(1, 1, figsize=set_size(textWidth, 0.5,(1,1)))
+        #fig2, ax[0,1] = plt.subplots(1, 1, figsize=set_size(textWidth, 0.5,(1,1)))
         for i in range(modeN):
-            plt.plot(time, muValues[i,:], label='$mu^' + str(i) + '$')
-        plt.legend()
+            ax[1,1].plot(time, muValues[i,:], label='$mu^' + str(i) + '$')
+        ax[1,1].legend()
         #fig2.savefig('../gaussianProcess.tex/img/modeEstimation.pdf', format='pdf', bbox_inches='tight')
 
     # save data
@@ -235,6 +248,7 @@ def runPrediction(stateN, modeN, filter, zValues:np.ndarray, time:np.ndarray):
 
         df.to_csv(folder + simName + '_data.csv', index=False)
 
+    fig.show()
     plt.show()
 
 param3 = param.copy()
