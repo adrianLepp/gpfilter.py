@@ -5,7 +5,6 @@ import numpy as np
 from GP_BF import GP_UKF
 from dynamicSystem import simulateNonlinearSSM
 import matplotlib.pyplot as plt
-from plotConfig import set_size
 
 #plt.style.use('seaborn')
 #plt.style.use('tex')

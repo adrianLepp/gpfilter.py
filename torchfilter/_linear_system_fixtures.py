@@ -18,7 +18,7 @@ import torchfilter
 from torchfilter import types
 
 
-@pytest.fixture
+#@pytest.fixture
 def generated_data() -> Tuple[
     types.StatesTorch, types.ObservationsNoDictTorch, types.ControlsNoDictTorch
 ]:
