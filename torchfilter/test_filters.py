@@ -421,7 +421,7 @@ def _run_filter(
         filter_model.initialize_beliefs(
             mean=states[0],
             covariance=torch.zeros(size=(N, state_dim, state_dim))
-            + torch.eye(state_dim)[None, :, :] * 0.5,
+            + torch.eye(state_dim)[None, :, :] * 1e-7,
         )
 
     # Run the filter on the remaining `T - 1` timesteps
