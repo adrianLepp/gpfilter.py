@@ -14,7 +14,7 @@ from helper import init_GP_UKF, init_UKF, createTrainingData
 import pandas as pd
 import json
 
-stateTransition, observation = getThreeTankEquations(param, observe= (False, False, False))
+stateTransition, observation = getThreeTankEquations(param, observe= (True, False, False))
 # %%
 
 simCounter = 11
@@ -25,7 +25,7 @@ GP = True
 SAVE = False
 
 NORMALIZE = True
-OPTIM_STEPS = 500
+OPTIM_STEPS = 100
 
 
 gp_model = GP_SSM_gpytorch_multitask
@@ -201,7 +201,7 @@ def runPrediction(stateN, modeN, filter, zValues:np.ndarray, time:np.ndarray):
     for i in range(simLength):
         # perform predict/update cycle
         filter.predict()
-        meas = zValues[0,i] + zValues[1,i] + zValues[2,i] 
+        meas = zValues[0,i] 
         filter.update(meas)#TODO change this
 
         if MULTI_MODEL:
