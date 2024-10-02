@@ -29,7 +29,7 @@ X create measurement_model equal to LinearParticleFilterMeasurementModel(),
 
 '''
 dt=0.1
-T = 100
+T = 50
 x0 = np.zeros(3)
 
 metaParams = [
@@ -38,8 +38,8 @@ metaParams = [
 ]
 
 metaParams2 = [
-    {'T':T, 'downsample':100}, 
-    {'T':T, 'downsample':100}, 
+    {'T':T, 'downsample':1}, 
+    {'T':T, 'downsample':1}, 
 ]
 
 param2 = param.copy()
@@ -54,10 +54,10 @@ params = [
 ]
 xD, yD, dxD, tsD = createTrainingData(ThreeTank, params, metaParams, 3, dt, x0, multipleSets=False, plot =False)
 
-xD2, yD2, dxD2, tsD2 = createTrainingData(ThreeTank, params, metaParams2, 3, dt, x0, multipleSets=True, plot =True)
+xD2, yD2, dxD2, tsD2 = createTrainingData(ThreeTank, [param, param2] , metaParams2, 3, dt, x0, multipleSets=True, plot =True)
 
 xTest = torch.tensor(xD.transpose()).float()
-yTest = torch.tensor(yD[0:1,:].transpose()).float() #TODO: adjustment needs to be automated
+yTest = torch.tensor(yD[0:3,:].transpose()).float() #TODO: adjustment needs to be automated
 #uTest = torch.zeros_like(yTest)
 uTest = torch.zeros(xTest.shape[0], 1, 1)
 
@@ -75,44 +75,84 @@ xTrain2 = torch.tensor(xD2[1].transpose()).float()
 dxTrain1 = torch.tensor(dxD2[0].transpose()).float()
 dxTrain2 = torch.tensor(dxD2[1].transpose()).float()
 
-sigma_y = 1e-7
-
+sigma_y = 1e-5
 # shape = list(tensor.shape)
 # shape.insert(dim, 1)
 # return tensor.view(*shape)
+
+def _run_imm_filter(
+    filter_model: torchfilter.base.Filter,
+    data: Tuple[
+        types.StatesTorch, types.ObservationsNoDictTorch, types.ControlsNoDictTorch
+    ],
+    initialize_beliefs: bool = True,
+) -> torch.Tensor:
+    """Helper for running a filter and returning estimated states.
+
+    Args:
+        filter_model (torchfilter.base.Filter): Filter to run.
+        data (Tuple[
+            types.StatesTorch, types.ObservationsNoDictTorch, types.ControlsNoDictTorch
+        ]): Data to run on. Shapes of all inputs should be `(T, N, *)`.
+
+    Returns:
+        torch.Tensor: Estimated states. Shape should be `(T - 1, N, state_dim)`.
+    """
+
+    # Get data
+    states, observations, controls = data
+    T, N, state_dim = states.shape
+
+    # Initialize the filter belief to match the first timestep
+    if initialize_beliefs:
+        filter_model.initialize_beliefs(
+            mean=states[0],
+            covariance=torch.zeros(size=(N, state_dim, state_dim))
+            + torch.eye(state_dim)[None, :, :] * 1e-7,
+        )
+
+    # Run the filter on the remaining `T - 1` timesteps
+    estimated_states, estimated_modes = filter_model.forward_loop(
+        observations=observations[1:], controls=controls[1:]
+    )
+
+    # Check output and return
+    assert estimated_states.shape == (T - 1, N, state_dim)
+    return estimated_states, estimated_modes
 
 def test_particle_filter(generated_data):
     """Smoke test for particle filter."""
 
     gpModel1 = GpDynamicsModel(3, 1, xTrain1, dxTrain1, normalize=True)
-    gpModel1.optimize(verbose=True, iterations=500)
+    gpModel1.optimize(verbose=True, iterations=50)
 
     gpModel2 = GpDynamicsModel(3, 1, xTrain2, dxTrain2, normalize=True)
-    gpModel2.optimize(verbose=True, iterations=1)
+    gpModel2.optimize(verbose=True, iterations=50)
 
-    # estimate = _run_filter(
-    #     IMMParticleFilter(
-    #         dynamics_models=[gpModel1, gpModel2],
-    #         measurement_model=IdentityParticleFilterMeasurementModel(3, 3, (True, True, True), sigma_y), #TODO: adjustment needs to be automated
-    #         mu = [0.5, 0.5],
-    #         Pi = torch.tensor([[0.9, 0.1], [0.1, 0.9]]),
-    #         state_dim= 3,
-    #         num_particles=100,
-    #     ),
-    #     generated_data,
-    # )
-
-    estimate = _run_filter(
-        torchfilter.filters.ParticleFilter(
-            dynamics_model=gpModel1,
-            measurement_model=IdentityParticleFilterMeasurementModel(3, 1, (True, False, False), sigma_y), #TODO: adjustment needs to be automated
+    estimates, modes = _run_imm_filter(
+        IMMParticleFilter(
+            dynamics_models=[gpModel1, gpModel2],
+            measurement_model=IdentityParticleFilterMeasurementModel(3, 3, (True, True, True), sigma_y), #TODO: adjustment needs to be automated
+            mu = [0.9, 0.1],
+            Pi = torch.tensor([[0.9, 0.1], [0.1, 0.9]]),
+            state_dim= 3,
+            num_particles=100,
+            #estimation_method='argmax'
         ),
         generated_data,
     )
 
-    x1 = estimate[:,:,0].numpy()
-    x2 = estimate[:,:,1].numpy()
-    x3 = estimate[:,:,2].numpy()
+    # estimate = _run_filter(
+    #     torchfilter.filters.ParticleFilter(
+    #         dynamics_model=gpModel1,
+    #         measurement_model=IdentityParticleFilterMeasurementModel(3, 1, (True, False, False), sigma_y), #TODO: adjustment needs to be automated
+    #     ),
+    #     generated_data,
+    # )
+
+    x1 = estimates[:,:,0].numpy()
+    x2 = estimates[:,:,1].numpy()
+    x3 = estimates[:,:,2].numpy()
     plt.figure()
     plt.plot(tsD[:-1],x1, label = 'x1')
     plt.plot(tsD[:-1],x2, label = 'x2')
@@ -122,6 +162,12 @@ def test_particle_filter(generated_data):
     plt.plot(tsD,yD[1,:], label = 'y2')
     plt.plot(tsD,yD[2,:], label = 'y3')
     plt.legend()
+
+    plt.figure()
+    plt.plot(tsD[:-1],modes[:,:,0].numpy(), label = 'mode1')
+    plt.plot(tsD[:-1],modes[:,:,1].numpy(), label = 'mode2')
+    plt.legend()
+
     plt.show()
 
 
@@ -227,7 +273,7 @@ class GpDynamicsModel(torchfilter.base.DynamicsModel):
                  dxData, 
                  kern=None, 
                  likelihood=gpytorch.likelihoods.MultitaskGaussianLikelihood,
-                 model= BatchIndependentMultitaskGPModel, #MultitaskGPModel,
+                 model= MultitaskGPModel, # BatchIndependentMultitaskGPModel, #
                  normalize=False, 
                  trainable: bool = False
     ):
@@ -355,7 +401,7 @@ class GpDynamicsModel(torchfilter.base.DynamicsModel):
 
         #return predicted_states, var.tril()
         varS = var @ var.mT + 1e-7
-        return predicted_states, varS.cholesky()
+        return predicted_states, torch.linalg.cholesky(varS)
         return predicted_states, var[None, :, :].expand((N, state_dim, state_dim))
 
 class IMMParticleFilter(torchfilter.base.Filter):
@@ -393,6 +439,7 @@ class IMMParticleFilter(torchfilter.base.Filter):
 
         # Settings                
         self.Pi = Pi
+        self.mu = mu
         self.num_modes = len(dynamics_models)
         self.num_particles = num_particles
         """int: Number of particles to represent our belief distribution.
@@ -452,11 +499,15 @@ class IMMParticleFilter(torchfilter.base.Filter):
         )
         assert self.particle_states.shape == (N, self.num_modes, self.num_particles, self.state_dim)
 
-        #self.particle_weights = torch.ones((N, self.num_modes, self.num_particles), dtype=torch.float32) / self.num_particles
+        self.particle_log_weights = torch.zeros((N, self.num_modes, self.num_particles), dtype=torch.float32)
+        for j in range(self.num_modes):
+            self.particle_log_weights[:,j,:] =  np.log(self.mu[j]/self.num_particles)
+
         # Normalize weights #TODO: weights need to add up to one over all modes
-        self.particle_log_weights = self.particle_states.new_full(
-            (N, self.num_modes,  self.num_particles), float(-np.log(self.num_particles * self.num_modes, dtype=np.float32))
-        )
+        # self.particle_log_weights = self.particle_states.new_full(
+        #     #(N, self.num_modes,  self.num_particles), float(-np.log(self.num_particles * self.num_modes, dtype=np.float32))
+        #     (N, self.num_modes,  self.num_particles), float(np.log(self.mu[], self.num_particles, dtype=np.float32))
+        # )
         assert self.particle_log_weights.shape == (N, self.num_modes, self.num_particles)
 
         # Set initialized flag
@@ -533,7 +584,7 @@ class IMMParticleFilter(torchfilter.base.Filter):
         for j in range(self.num_modes):
             for i in range(self.num_modes):
                 for l in range(self.num_particles):
-                    wResampling[j, l+(i-1)*self.num_particles] = self.Pi[i,j]*self.particle_log_weights[:,i,l]  / mPrioKK[:,j] 
+                    wResampling[j, l+(i)*self.num_particles] = self.Pi[i,j]*self.particle_log_weights[:,i,l].exp()  / mPrioKK[:,j] 
 
 
         # Reduce number of particles to self.num_particles per Mode by Resampling
@@ -547,12 +598,13 @@ class IMMParticleFilter(torchfilter.base.Filter):
                 for l in range(self.num_particles):
                     #pos = find(torch.rand <= torch.cumsum(wResampling[j,:]),1)
 
-                    pos = torch.nonzero(torch.cumsum(wResampling[j, :], dim=0) < torch.rand(1) * sumW)[0].item()
+                    #pos = torch.nonzero(torch.cumsum(wResampling[j, :], dim=0) < torch.rand(1) * sumW)[0].item()
+                    pos = torch.nonzero(torch.cumsum(wResampling[j, :], dim=0) >= torch.rand(1) * sumW)[0].item()
                     xPrio[:,j,l,:] = xResampling[pos,:]       
                 #
             #
             # new prior weights
-            wPrio[:,j,:] = torch.log(mPrioKK[:,j] / self.num_particles) #TODO: nicht log verteilt und gar nicht mal benutzt
+            wPrio[:,j,:] = torch.log(mPrioKK[:,j] / self.num_particles)
 
         reshaped_states = xPrio.reshape(-1, self.num_particles, self.state_dim)
 
@@ -564,6 +616,7 @@ class IMMParticleFilter(torchfilter.base.Filter):
                 initial_states=reshaped_states[j,:,:], controls=reshaped_controls
             )
         
+        #TODO: is this resampling here at the right place? What does it actually do? 
         self.particle_states = (
             torch.distributions.MultivariateNormal(
                 loc=predicted_states, scale_tril=scale_trils
@@ -575,36 +628,50 @@ class IMMParticleFilter(torchfilter.base.Filter):
 
 
         # 3. correction step Re-weight particles using observations
+        weightCorrect = torch.zeros(N, self.num_modes, self.num_particles)
+
+
         for j in range(self.num_modes):
-            self.particle_log_weights[:,j,:] = wPrio[:,j,:] + self.measurement_model(
+            weightCorrect[:,j,:] = self.measurement_model(
                 states=self.particle_states[:,j,:,:],
                 observations=observations,
             )
+            # self.particle_log_weights[:,j,:] = wPrio[:,j,:] + self.measurement_model(
+            #     states=self.particle_states[:,j,:,:],
+            #     observations=observations,
+            # )
+        self.particle_log_weights = wPrio + weightCorrect
 
         # Normalize particle weights to sum to 1.0
         self.particle_log_weights = self.particle_log_weights - torch.logsumexp(
-            self.particle_log_weights, dim=2, keepdim=True #TODO dim=2? 
+            self.particle_log_weights, dim=(1,2), keepdim=True #TODO dim=2? 
         ) #TODO normalization is not correct. accros all modes should sum to 1
 
         # Compute output
         state_estimates: types.StatesTorch
         
-        mPost = self.particle_log_weights.sum(1)
-        xEstM = torch.zeros(N, self.num_modes, self.state_dim)
+        mPost = self.particle_log_weights.exp().sum(dim=2)
+        #print('mode Probability', mPost)
+        #xEstM = torch.zeros(N, self.num_modes, self.state_dim)
 
         if self.estimation_method == "weighted_average":
-
-            for j in range(self.num_modes):
-                xEstM[:,j,:] = torch.sum(
-                    torch.exp(self.particle_log_weights[:, j, :, np.newaxis])
-                    * self.particle_states[:, j, : ,: ],
-                    dim=1,#TODO: dim=2?
-            )
+            xEstM = (self.particle_log_weights[:, :, :, np.newaxis].exp()* self.particle_states[:, :, : ,: ]).sum(dim=2)
+    
+            # for j in range(self.num_modes):
+            #     xEstM[:,j,:] = torch.sum(
+            #         torch.exp(self.particle_log_weights[:, j, :, np.newaxis])
+            #         * self.particle_states[:, j, : ,: ],
+            #         dim=1,
+            #     )
             state_estimates = xEstM.sum(dim=1)
-            modeEstimates = torch.sum(torch.exp(self.particle_log_weights[:, :, :]), dim=2)
+            modeEstimates = self.particle_log_weights.exp().sum(dim=2)
 
         elif self.estimation_method == "argmax":
-            assert False, "argmax not implemented"
+            best_indices = torch.argmax(self.particle_log_weights, dim=2)
+            # state_estimates = torch.gather(
+            #     self.particle_states, dim=2, index=best_indices
+            # )
+            state_estimates = self.particle_states[:,0,best_indices[0,0],:]
         else:
             assert False, "Unsupported estimation method!"
 
@@ -617,90 +684,66 @@ class IMMParticleFilter(torchfilter.base.Filter):
         assert self.particle_states.shape == (N, self.num_modes, self.num_particles, state_dim)
         assert self.particle_log_weights.shape == (N, self.num_modes, self.num_particles)
 
-        return state_estimates #, modeEstimates
+        return state_estimates, modeEstimates
     
-    def immpfCycle(self, transP:torch.Tensor,xPostK:torch.Tensor ,y:torch.Tensor):
-        # initialization
-        xPrioKK = torch.zeros(1,self.num_modes,self.num_particles,self.state_dim)
-        xPostKK = xPrioKK
-        wPrioKK = torch.zeros(self.num_modes,self.num_particles)
-        wPostKK = wPrioKK
+    def forward_loop(
+        self, *, observations: types.ObservationsTorch, controls: types.ControlsTorch
+    ) -> types.StatesTorch:
+        """Filtering forward pass, over sequence length `T` and batch size `N`.
+        By default, this is implemented by iteratively calling `forward()`.
 
-        # posterior mode probability as sum of posterior weights
-        mPostK = self.particle_log_weights.sum(2)
-        # for j in range(self.num_modes):
-        #     mPostK[j] = sum(wPostK[:,j])
-        
-        ## 1. mode switching
-        mPrioKK =   mPostK @ transP
-        # for j in range(self.num_modes): 
-        #     for i in range(self.num_modes):
-        #         # prior mode probability
-        #         mPrioKK[j] = mPrioKK[j] + mPostK[i]*transP[i,j] 
-        
-        # create particle set with self.num_particles*self.num_modes particles per Mode 
-        # to approximate prior density after mode change
-        xResampling = xPostK.reshape(self.num_particles * self.num_modes, self.state_dim)
-        
+        To inject code between timesteps (for example, to inspect hidden state),
+        use `register_forward_hook()`.
 
-        wResampling = torch.zeros(self.num_modes, self.num_particles*self.num_modes)
-        for j in range(self.num_modes):
-            for i in range(self.num_modes):
-                for l in range(self.num_particles):
-                    wResampling[j, l+(i-1)*self.num_particles] = transP[i,j]*self.particle_log_weights[:,i,l]  / mPrioKK[:,j] 
-        
-        # Reduce number of particles to self.num_particles per Mode by Resampling
-        for j in range(self.num_modes):
-            if mPrioKK[:,j] <= self.num_modes/(self.num_particles*10): # if prior mode probabilty to low, take over posterior k-1
-                xPrioKK[:,j,:,:] = xPostK[:,j,:,:]
-            else:
-                for l in range(self.num_particles):
-                    #pos = find(torch.rand <= torch.cumsum(wResampling[j,:]),1)
+        Args:
+            observations (dict or torch.Tensor): observation inputs. Should be
+                either a dict of tensors or tensor of size `(T, N, ...)`.
+            controls (dict or torch.Tensor): control inputs. Should be either a
+                dict of tensors or tensor of size `(T, N, ...)`.
 
-                    pos = torch.nonzero(torch.cumsum(wResampling[j, :]) >= torch.rand(1), as_tuple=False)[0].item()
-                    xPrioKK[j,l,:] = xResampling[pos,:]       
-                #
-            #
-            # new prior weights
-            wPrioKK[j,:] = mPrioKK[:,j] / self.num_particles
-        # 
-        
-        ## 2. Prediction
-        for j in range(self.num_modes):
-            for l in range(self.num_particles):
-                # solve xKK = f(xK,uK,mKK) and yK = h(xKK,mKK) for alle particles
-                xPostKK[:,j,l,:], _ = systemSolver[j](xPrioKK[j,l,:])
-                #yTheor = measurement[j](xPrioKK[j,l,:])
-                
-        ## 3. Correction       
-                # calculate measurement probability p(y|x,m) by distance of
-                # calculated yTheor and real measurement y with 
-                # normal distribution
-                #pY = 1/((torch.det(2*torch.pi*sigmaY))^(0.5)) * torch.exp(-0.5*(y - yTheor).transpose(1,2) * torch.inv(sigmaY)* (y - yTheor))
-                
-                # posterior weights
-                # wPostKK[j,l] = wPrioKK[j,l] * pY 
-                # if wPostKK[j,l] < 1e-30:
-                #     wPostKK[j,l] = 1e-30
-                #
-            #
+        Returns:
+            torch.Tensor: Predicted states at each timestep. Shape should be
+            `(T, N, state_dim).`
+        """
+
+        # Wrap our observation and control inputs
         #
-        # normalize weights
-        summe = wPostKK.sum()
-        wPostKK = wPostKK /summe
+        # If either of our inputs are dictionaries, this provides a tensor-like
+        # interface for slicing, accessing shape, etc
+        observations_wrapped = fannypack.utils.SliceWrapper(observations)
+        controls_wrapped = fannypack.utils.SliceWrapper(controls)
 
-        self.particle_log_weights = self.particle_log_weights + self.measurement_model(
-            states=xPostKK,
-            observations=y,
+        # Get sequence length (T), batch size (N)
+        T, N = controls_wrapped.shape[:2]
+        assert observations_wrapped.shape[:2] == (T, N)
+
+        # Filtering forward pass
+        # We treat t = 0 as a special case to make it easier to create state_predictions
+        # tensor on the correct device
+        t = 0
+        current_prediction, current_mode = self(
+            observations=observations_wrapped[t], controls=controls_wrapped[t]
         )
+        state_predictions = current_prediction.new_zeros((T, N, self.state_dim))
+        mode_predictions = torch.zeros((T, N, self.num_modes))
+        assert current_prediction.shape == (N, self.state_dim)
+        state_predictions[t] = current_prediction
+        mode_predictions[t] = current_mode
 
-        # Normalize particle weights to sum to 1.0
-        self.particle_log_weights = self.particle_log_weights - torch.logsumexp(
-            self.particle_log_weights, dim=1, keepdim=True
-        )
+        for t in range(1, T):
+            # Compute state prediction for a single timestep
+            # We use __call__ to make sure hooks are dispatched correctly
+            current_prediction, current_mode_prediction = self(
+                observations=observations_wrapped[t], controls=controls_wrapped[t]
+            )
 
-        return xPostKK. self.particle_log_weights
-        return xPostKK, wPostKK
+            # Validate & add to output
+            assert current_prediction.shape == (N, self.state_dim)
+            state_predictions[t] = current_prediction
+            mode_predictions[t] = current_mode_prediction
+
+        # Return state predictions
+        return state_predictions, mode_predictions
 
 test_particle_filter(testData)
 
