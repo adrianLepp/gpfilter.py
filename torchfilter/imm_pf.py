@@ -217,15 +217,20 @@ class IMMParticleFilter(torchfilter.base.Filter):
             predicted_states[:,j,:,:], scale_trils = self.dynamics_models[j](
                 initial_states=reshaped_states[j,:,:], controls=reshaped_controls
             )
+
         
-        #TODO: is this resampling here at the right place? What does it actually do? 
+        noise = self.dynamics_models[0].Q[None, :, :].expand((N, self.state_dim, self.state_dim))#FIXME
+        
+        # #TODO: is this resampling here at the right place? What does it actually do? 
         self.particle_states = (
             torch.distributions.MultivariateNormal(
-                loc=predicted_states, scale_tril=scale_trils
+                #loc=predicted_states, scale_tril=scale_trils
+                loc=predicted_states, scale_tril=noise
             )
             .rsample()  # Note that we use `rsample` to make sampling differentiable
             .view(N, q, M, self.state_dim)
         )
+        #self.particle_states = predicted_states
         assert self.particle_states.shape == (N, q, M, self.state_dim)
 
 
@@ -244,10 +249,20 @@ class IMMParticleFilter(torchfilter.base.Filter):
             # )
         self.particle_log_weights = wPrio + weightCorrect
 
+        #print('correct. min', weightCorrect.min().item(), 'max', weightCorrect.max().item(), 'sum', weightCorrect.exp().sum(dim=(1,2)).item())
+
+
+        #print('norm const', torch.logsumexp(self.particle_log_weights, dim=(1,2), keepdim=True))
         # Normalize particle weights to sum to 1.0
         self.particle_log_weights = self.particle_log_weights - torch.logsumexp(
-            self.particle_log_weights, dim=(1,2), keepdim=True #TODO dim=2? 
-        ) #TODO normalization is not correct. accros all modes should sum to 1
+            self.particle_log_weights, dim=(1,2), keepdim=True 
+        )
+
+        # self.particle_log_weights = self.particle_log_weights - torch.logsumexp(
+        #     self.particle_log_weights, dim=(1,2), keepdim=True 
+        # )
+
+        #print('weights . min', self.particle_log_weights.min().item(), 'max', self.particle_log_weights.max().item(), 'sum', self.particle_log_weights.exp().sum(dim=(1,2)).item())
 
         # Compute output
         state_estimates: types.StatesTorch

@@ -2,12 +2,8 @@ import torchfilter
 from torchfilter import types
 import torch
 import torch.nn as nn
-from typing import Tuple, cast, Optional, List
+from typing import Tuple, cast
 import gpytorch
-import numpy as np
-import matplotlib.pyplot as plt
-import fannypack
-from overrides import overrides
 
 from GP_BF import MultitaskGPModel, BatchIndependentMultitaskGPModel
 from util import normalize_min_max_torch, denormalize_min_max
@@ -24,7 +20,8 @@ class GpDynamicsModel(torchfilter.base.DynamicsModel):
                  state_dim:int, 
                  dt:int,
                  xData, 
-                 dxData, 
+                 dxData,
+                 sigma_x, 
                  kern=None, 
                  likelihood=gpytorch.likelihoods.MultitaskGaussianLikelihood,
                  model=  BatchIndependentMultitaskGPModel, #MultitaskGPModel, #
@@ -49,6 +46,7 @@ class GpDynamicsModel(torchfilter.base.DynamicsModel):
             self.dx_train = dxData
 
         self.dt = dt
+        self.Q = torch.eye(state_dim) * sigma_x
 
         self.likelihood = likelihood(num_tasks=self.state_dim)
         self.gp = model(self.x_train , self.dx_train , self.likelihood, num_tasks=self.state_dim)

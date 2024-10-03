@@ -12,12 +12,17 @@ from overrides import overrides
 from threeTank import ThreeTank, parameter as param
 from helper import createTrainingData
 from measurement import IdentityParticleFilterMeasurementModel
-from gpModel import GpDynamicsModel
+from gp_ssm import GpDynamicsModel
+from threeTank_pytorch import ThreeTankDynamicsModel
 from imm_pf import IMMParticleFilter
+from test_filters import _run_filter
 
 dt=0.1
 T = 50
 x0 = np.zeros(3)
+
+#param['sigmaX'] = 1e-4
+# param['sigmaY'] = 0
 
 metaParams = [
     {'T':T, 'downsample':1},
@@ -25,8 +30,8 @@ metaParams = [
 ]
 
 metaParams2 = [
-    {'T':T, 'downsample':10}, 
-    {'T':T, 'downsample':10}, 
+    {'T':50, 'downsample':10}, 
+    {'T':50, 'downsample':10}, 
 ]
 
 param2 = param.copy()
@@ -41,10 +46,10 @@ params = [
 ]
 xD, yD, dxD, tsD = createTrainingData(ThreeTank, params, metaParams, 3, dt, x0, multipleSets=False, plot =False)
 
-xD2, yD2, dxD2, tsD2 = createTrainingData(ThreeTank, [param, param2] , metaParams2, 3, dt, x0, multipleSets=True, plot =True)
+xD2, yD2, dxD2, tsD2 = createTrainingData(ThreeTank, [param, param2] , metaParams2, 3, dt, x0, multipleSets=True, plot =False)
 
 xTest = torch.tensor(xD.transpose()).float()
-yTest = torch.tensor(yD[0:2,:].transpose()).float() #TODO: adjustment needs to be automated
+yTest = torch.tensor(yD[0:1,:].transpose()).float() #TODO: adjustment needs to be automated
 #uTest = torch.zeros_like(yTest)
 uTest = torch.zeros(xTest.shape[0], 1, 1)
 
@@ -57,12 +62,16 @@ yTest = yTest.view(*testShapeY)
 
 testData = (xTest, yTest, uTest)
 
+
+# xTrain = torch.tensor(xD2.transpose()).float()
+# dxTrain = torch.tensor(dxD2.transpose()).float()
 xTrain1 = torch.tensor(xD2[0].transpose()).float()
 xTrain2 = torch.tensor(xD2[1].transpose()).float()
 dxTrain1 = torch.tensor(dxD2[0].transpose()).float()
 dxTrain2 = torch.tensor(dxD2[1].transpose()).float()
 
-sigma_y = 1e-7
+sigma_y = 1e-2
+sigma_x = 1e-7
 # shape = list(tensor.shape)
 # shape.insert(dim, 1)
 # return tensor.view(*shape)
@@ -110,16 +119,23 @@ def _run_imm_filter(
 def test_particle_filter(generated_data):
     """Smoke test for particle filter."""
 
-    gpModel1 = GpDynamicsModel(3, 1, xTrain1, dxTrain1, normalize=True)
-    gpModel1.optimize(verbose=True, iterations=50)
+    gpModel1 = GpDynamicsModel(3, 1, xTrain1, dxTrain1, sigma_x, normalize=True)
+    gpModel1.optimize(verbose=False, iterations=100)
 
-    gpModel2 = GpDynamicsModel(3, 1, xTrain2, dxTrain2, normalize=True)
-    gpModel2.optimize(verbose=True, iterations=50)
+    gpModel2 = GpDynamicsModel(3, 1, xTrain2, dxTrain2, sigma_x, normalize=True)
+    gpModel2.optimize(verbose=False, iterations=1)
+
+    # gpModel = GpDynamicsModel(3, 1, xTrain, dxTrain, sigma_x, normalize=True)
+    # gpModel.optimize(verbose=False, iterations=100)
+
+    model1 =  ThreeTankDynamicsModel(3, dt, param)
+    model2 =  ThreeTankDynamicsModel(3, dt, param2)
 
     estimates, modes = _run_imm_filter(
         IMMParticleFilter(
             dynamics_models=[gpModel1, gpModel2],
-            measurement_model=IdentityParticleFilterMeasurementModel(3, 2, (True, True, False), sigma_y), #TODO: adjustment needs to be automated
+            #dynamics_models=[model1, model2],
+            measurement_model=IdentityParticleFilterMeasurementModel(3, 1, (True, False, False), sigma_y), #TODO: adjustment needs to be automated
             mu = [0.5, 0.5],
             Pi = torch.tensor([[0.9, 0.1], [0.1, 0.9]]),
             state_dim= 3,
@@ -129,9 +145,9 @@ def test_particle_filter(generated_data):
         generated_data,
     )
 
-    # estimate = _run_filter(
+    # estimates = _run_filter(
     #     torchfilter.filters.ParticleFilter(
-    #         dynamics_model=gpModel1,
+    #         dynamics_model=gpModel,
     #         measurement_model=IdentityParticleFilterMeasurementModel(3, 1, (True, False, False), sigma_y), #TODO: adjustment needs to be automated
     #     ),
     #     generated_data,
