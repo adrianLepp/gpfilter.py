@@ -5,6 +5,9 @@ from typing import Optional, List
 import numpy as np
 import fannypack
 from overrides import overrides
+import gpytorch
+
+gpytorch.settings.debug(False)
 
 class IMMParticleFilter(torchfilter.base.Filter):
     """Generic differentiable particle filter."""
@@ -36,7 +39,7 @@ class IMMParticleFilter(torchfilter.base.Filter):
         # Assign submodules
         self.dynamics_models = dynamics_models
         """torchfilter.base.DynamicsModel: Forward model."""
-        self.measurement_model = measurement_model
+        self.measurement_model:torchfilter.base.ParticleFilterMeasurementModel = measurement_model
         """torchfilter.base.ParticleFilterMeasurementModel: Observation model."""
 
         # Settings                
@@ -101,7 +104,7 @@ class IMMParticleFilter(torchfilter.base.Filter):
         )
         assert self.particle_states.shape == (N, self.num_modes, self.num_particles, self.state_dim)
 
-        self.particle_log_weights = torch.zeros((N, self.num_modes, self.num_particles), dtype=torch.float32)
+        self.particle_log_weights = torch.zeros((N, self.num_modes, self.num_particles), dtype=torch.float32) # requires_grad=True
         for j in range(self.num_modes):
             self.particle_log_weights[:,j,:] =  np.log(self.mu[j]/self.num_particles)
 
@@ -168,6 +171,7 @@ class IMMParticleFilter(torchfilter.base.Filter):
         #
         # Currently each of the M particles within a "sample" get the same action, but
         # we could also add noise in the action space (a la Jonschkowski et al. 2018)
+        # reshaped_states = self.particle_states.reshape(-1, self.state_dim)
         reshaped_states = self.particle_states.reshape(-1, self.num_particles, self.state_dim) #reduced to  q x M x state_dim
         reshaped_controls = fannypack.utils.SliceWrapper(controls).map(
             lambda tensor: torch.repeat_interleave(tensor, repeats=M, dim=0)
@@ -267,7 +271,6 @@ class IMMParticleFilter(torchfilter.base.Filter):
         # Compute output
         state_estimates: types.StatesTorch
         
-        mPost = self.particle_log_weights.exp().sum(dim=2)
         #print('mode Probability', mPost)
         #xEstM = torch.zeros(N, self.num_modes, self.state_dim)
 
@@ -361,3 +364,70 @@ class IMMParticleFilter(torchfilter.base.Filter):
 
         # Return state predictions
         return state_predictions, mode_predictions
+    
+    def optimize(self, iterations=50, verbose=False):
+         # Find optimal model hyperparameters
+
+        # We have multiple models 
+        self.dynamics_models[0].gp .train()
+        self.dynamics_models[0].likelihood.train()
+
+        self.dynamics_models[1].gp .train()
+        self.dynamics_models[1].likelihood.train()
+
+        # Use the adam optimizer
+        optimizer = torch.optim.Adam([
+            {'params': self.dynamics_models[0].gp.parameters()},
+            {'params': self.dynamics_models[1].gp.parameters()},
+        ],
+        lr=0.1)  # Includes GaussianLikelihood parameters
+
+        # "Loss" for GPs - the marginal log likelihood
+        mll0 = gpytorch.mlls.ExactMarginalLogLikelihood(self.dynamics_models[0].likelihood, self.dynamics_models[0].gp)
+        mll1 = gpytorch.mlls.ExactMarginalLogLikelihood(self.dynamics_models[1].likelihood, self.dynamics_models[1].gp)
+
+        for i in range(iterations):
+            optimizer.zero_grad()
+            
+            output0 = self.dynamics_models[0].gp(self.dynamics_models[0].x_train)
+            loss0 = -mll0(output0, self.dynamics_models[0].dx_train)
+            loss0.backward()
+
+            output1 = self.dynamics_models[1].gp(self.dynamics_models[1].x_train)
+            loss1 = -mll1(output1, self.dynamics_models[1].dx_train)
+            loss1.backward()
+
+
+            #mode loss
+            for i in range(self.dynamics_models[0].x_train.shape[0]):
+                self.initialize_beliefs(
+                    mean=self.dynamics_models[0].x_train[i][None],
+                    #covariance=torch.zeros(size=(self.dynamics_models[0].x_train.shape[0], self.state_dim, self.state_dim)) + torch.eye(self.state_dim)[None, :, :] * 1e-7,
+                    covariance = self.dynamics_models[0].Q[None, :, :].expand((self.dynamics_models[0].x_train[i][None].shape[0], self.state_dim, self.state_dim)) 
+                    + torch.eye(self.state_dim)[None, :, :] * 1e-7,
+                )
+                observations, _ =  self.measurement_model.kalman_filter_measurement_model(states=self.dynamics_models[0].x_train[i][None].reshape((-1, self.state_dim)))
+
+                #controls = torch.zeros(self.dynamics_models[0].x_train[i].shape[0], 1, 1)
+                controls = torch.zeros(1, 1)
+
+                output0s, output0m = self(
+                    observations=observations, controls=controls
+                )
+                loss0m = modeLoss(output0m[0])
+                loss0m.backward()
+
+            #calculate output of one imm pf step. loss is wrong mode
+
+
+            if verbose: print('Iter %d/%d - Loss: %.3f' % (i + 1, iterations, loss0.item()+loss1.item()))
+            optimizer.step()
+            
+        self.dynamics_models[0].gp.eval()
+        self.dynamics_models[0].likelihood.eval()
+
+        self.dynamics_models[1].gp.eval()
+        self.dynamics_models[1].likelihood.eval()
+
+def modeLoss(mode_probability):
+    return -torch.log(mode_probability)

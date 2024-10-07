@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import pandas as pd
+import json
 
 from threeTank import ThreeTank, parameter as param
 from helper import createTrainingData
@@ -26,7 +27,11 @@ GP = True
 SAVE = False
 
 NORMALIZE = True
-OPTIM_STEPS = 1
+OPTIM_STEPS = 10
+
+folder = 'results/pf/'
+simName = 'threeTank'
+simCounter = 1
 
 # -----------------------------------------------------------------------------
 # model settings
@@ -48,7 +53,7 @@ S = 100
 
 #IMMM
 modeN = 2
-mu = [0.9, 0.1] 
+mu = [0.5, 0.5] 
 trans = torch.tensor([[0.9, 0.1], [0.1, 0.9]])
 
 param2 = param.copy()
@@ -105,62 +110,7 @@ yTest = yTest.view(*testShapeY)
 
 testData = (xTest, yTest, uTest)
 
-
-
-#param['sigmaX'] = 1e-4
-# param['sigmaY'] = 0
-
-# metaParams = [
-#     {'T':T, 'downsample':1},
-#     {'T':T, 'downsample':1}, 
-# ]
-
-# metaParams2 = [
-#     {'T':50, 'downsample':10}, 
-#     {'T':50, 'downsample':10}, 
-# ]
-
-# param2 = param.copy()
-# param2['c13'] = param['c13'] * 4 
-# param2['c32'] = param['c32'] * 4
-# param2['c2R'] = param['c2R'] * 4
-# param2['u'] = 0
-
-# params = [
-#     param,
-#     param2
-# ]
-# xD, yD, dxD, tsD = createTrainingData(ThreeTank, params, metaParams, 3, dt, x0, multipleSets=False, plot =False)
-
-# xD2, yD2, dxD2, tsD2 = createTrainingData(ThreeTank, [param, param2] , metaParams2, 3, dt, x0, multipleSets=True, plot =False)
-
-# xTest = torch.tensor(xD.transpose()).float()
-# yTest = torch.tensor(yD[0:1,:].transpose()).float() #TODO: adjustment needs to be automated
-# #uTest = torch.zeros_like(yTest)
-# uTest = torch.zeros(xTest.shape[0], 1, 1)
-
-# testShapeX = list(xTest.shape)
-# testShapeX.insert(1,1)
-# testShapeY = list(yTest.shape)
-# testShapeY.insert(1,1)
-# xTest = xTest.view(*testShapeX)
-# yTest = yTest.view(*testShapeY)
-
-# testData = (xTest, yTest, uTest)
-
-
-# xTrain = torch.tensor(xD2.transpose()).float()
-# dxTrain = torch.tensor(dxD2.transpose()).float()
-# xTrain1 = torch.tensor(xD2[0].transpose()).float()
-# xTrain2 = torch.tensor(xD2[1].transpose()).float()
-# dxTrain1 = torch.tensor(dxD2[0].transpose()).float()
-# dxTrain2 = torch.tensor(dxD2[1].transpose()).float()
-
-# sigma_y = 1e-2
-# sigma_x = 1e-7
-# shape = list(tensor.shape)
-# shape.insert(dim, 1)
-# return tensor.view(*shape)
+# -----------------------------------------------------------------------------
 
 def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:float, sigma_y:float, param, mu, trans_p, S:int ):
 # init variables for IMM-GP-UKF
@@ -172,7 +122,7 @@ def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:f
         if GP:
             for i in range(modeN):
                 gpModel = GpDynamicsModel(stateN, 1, torch.tensor(xD[i].transpose()).float(), torch.tensor(dxD[i].transpose()).float(), sigma_x, normalize=NORMALIZE)
-                gpModel.optimize(verbose=False, iterations=OPTIM_STEPS)
+                #gpModel.optimize(verbose=False, iterations=OPTIM_STEPS)
                 models.append(gpModel)
         else:
             for i in range(modeN):
@@ -187,6 +137,11 @@ def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:f
             state_dim= stateN,
             num_particles=S,
         )
+        # for param_name, param in imm.dynamics_models[0].gp.named_parameters():
+        #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
+        imm.optimize(OPTIM_STEPS, verbose)
+        # for param_name, param in imm.dynamics_models[0].gp.named_parameters():
+        #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
 
         return imm
 
@@ -239,7 +194,7 @@ def _run_imm_filter(
     assert estimated_states.shape == (T - 1, N, state_dim)
     return estimated_states, estimated_modes
 
-def test_particle_filter(filter, generated_data, multiModel:bool):
+def test_particle_filter(filter, generated_data, multiModel:bool, folder, simName):
     if multiModel:
         estimates, modes = _run_imm_filter(filter, generated_data)
     else:
@@ -251,28 +206,7 @@ def test_particle_filter(filter, generated_data, multiModel:bool):
     if modes is not None:
         modes = modes.squeeze().numpy().transpose()
 
-    plotResults(tsT[:-1], true_states.squeeze().numpy().transpose()[:,:-1], estimates.squeeze().numpy().transpose(), muValues=modes)
-
-
-    # x1 = estimates[:,:,0].numpy()
-    # x2 = estimates[:,:,1].numpy()
-    # x3 = estimates[:,:,2].numpy()
-    # plt.figure()
-    # plt.plot(tsD[:-1],x1, label = 'x1')
-    # plt.plot(tsD[:-1],x2, label = 'x2')
-    # plt.plot(tsD[:-1],x3, label = 'x3')
-
-    # plt.plot(tsD,yD[0,:], label = 'y1')
-    # plt.plot(tsD,yD[1,:], label = 'y2')
-    # plt.plot(tsD,yD[2,:], label = 'y3')
-    # plt.legend()
-
-    # plt.figure()
-    # plt.plot(tsD[:-1],modes[:,:,0].numpy(), label = 'mode1')
-    # plt.plot(tsD[:-1],modes[:,:,1].numpy(), label = 'mode2')
-    # plt.legend()
-
-    # plt.show()
+    plotResults(tsT[:-1], true_states.squeeze().numpy().transpose()[:,:-1], estimates.squeeze().numpy().transpose(), muValues=modes, folder=folder, simName=simName)
 
 
 def plotResults(
@@ -330,5 +264,39 @@ def plotResults(
 
 
 model = createFilter(stateN, measN, modeN, dt, xD, dxD, sigma_x, sigma_y, params, mu, trans, S)
-test_particle_filter(model, testData, MULTI_MODEL)
+
+settings = {
+    'stateN': stateN,
+    'pf': {},
+    'dt' : dt,
+}
+
+if GP:
+    simName += '_gp'
+    settings['gp'] ={
+    'optimSteps' :OPTIM_STEPS,
+    'normalize': NORMALIZE,
+    'params': params,
+    'metaParams': metaParams,
+    } 
+
+if MULTI_MODEL:
+    simName += '_imm'
+    settings['imm'] = {
+        'modeN': modeN,
+        'mu': mu,
+        'trans': trans.tolist(),
+    }
+
+simName += '_' + str(simCounter)
+
+dataName = folder + simName + 'settings'
+
+if SAVE:
+    with open(folder + simName + '_settings.json',"w") as f:
+        json.dump(settings,f)
+
+
+
+test_particle_filter(model, testData, MULTI_MODEL, folder, simName)
 
