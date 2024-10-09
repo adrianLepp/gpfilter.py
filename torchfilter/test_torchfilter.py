@@ -16,35 +16,33 @@ from threeTank_pytorch import ThreeTankDynamicsModel
 from imm_pf import IMMParticleFilter
 from test_filters import _run_filter
 
-from GP_BF import GP_SSM_gpy_multiout, GP_SSM_gpy_LVMOGP, GP_SSM_gpytorch_multitask, BatchIndependentMultitaskGPModel
+from GP_BF import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
 
 
-simCounter = 11
+GPModel = ConvolvedGPModel
 
 verbose = True
 MULTI_MODEL = True
 GP = True
-SAVE = False
+SAVE = True
 
 NORMALIZE = True
 OPTIM_STEPS = 10
 
 folder = 'results/pf/'
-simName = 'threeTank'
-simCounter = 1
+simName = 'threeTank_cgp'
+simCounter = 12
 
 # -----------------------------------------------------------------------------
 # model settings
 #------------------------------------------------------------------------------
-
-gp_model = GP_SSM_gpytorch_multitask
 
 
 stateN = 3
 measN = 1
 x0 = np.zeros(stateN) # initial state
 dt = 0.1
-T = 50
+T = 100
 
 #PF
 sigma_y = 1e-2
@@ -112,7 +110,7 @@ testData = (xTest, yTest, uTest)
 
 # -----------------------------------------------------------------------------
 
-def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:float, sigma_y:float, param, mu, trans_p, S:int ):
+def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:float, sigma_y:float, param, mu, trans_p, S:int, GPModel ):
 # init variables for IMM-GP-UKF
 
     meas_model:torchfilter.base.ParticleFilterMeasurementModel = IdentityParticleFilterMeasurementModel(stateN, measN, (True, False, False), sigma_y) #TODO: adjustment needs to be automated
@@ -121,7 +119,15 @@ def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:f
         models = []
         if GP:
             for i in range(modeN):
-                gpModel = GpDynamicsModel(stateN, 1, torch.tensor(xD[i].transpose()).float(), torch.tensor(dxD[i].transpose()).float(), sigma_x, normalize=NORMALIZE)
+                gpModel = GpDynamicsModel(
+                    stateN, 
+                    1, 
+                    torch.tensor(xD[i].transpose()).float(), 
+                    torch.tensor(dxD[i].transpose()).float(), 
+                    sigma_x, 
+                    model=GPModel,
+                    normalize=NORMALIZE
+                )
                 #gpModel.optimize(verbose=False, iterations=OPTIM_STEPS)
                 models.append(gpModel)
         else:
@@ -139,14 +145,23 @@ def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:f
         )
         # for param_name, param in imm.dynamics_models[0].gp.named_parameters():
         #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
-        imm.optimize(OPTIM_STEPS, verbose)
+        if GP:
+            imm.optimize(OPTIM_STEPS, verbose)
         # for param_name, param in imm.dynamics_models[0].gp.named_parameters():
         #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
 
         return imm
 
     else:
-        gpModel = GpDynamicsModel(stateN, 1, torch.tensor(xD.transpose()).float(), torch.tensor(dxD.transpose()).float(), sigma_x, normalize=NORMALIZE)
+        gpModel = GpDynamicsModel(
+            stateN, 
+            1, 
+            torch.tensor(xD.transpose()).float(), 
+            torch.tensor(dxD.transpose()).float(), 
+            sigma_x, 
+            model=GPModel,
+            normalize=NORMALIZE
+        )
         gpModel.optimize(OPTIM_STEPS, verbose)
         pf = torchfilter.filters.ParticleFilter(
             dynamics_model=gpModel,
@@ -206,7 +221,14 @@ def test_particle_filter(filter, generated_data, multiModel:bool, folder, simNam
     if modes is not None:
         modes = modes.squeeze().numpy().transpose()
 
-    plotResults(tsT[:-1], true_states.squeeze().numpy().transpose()[:,:-1], estimates.squeeze().numpy().transpose(), muValues=modes, folder=folder, simName=simName)
+    plotResults(
+        tsT[:-1], 
+        true_states.squeeze().numpy().transpose()[:,:-1], 
+        estimates.squeeze().numpy().transpose(), 
+        muValues=modes, 
+        folder=folder, 
+        simName=simName
+    )
 
 
 def plotResults(
@@ -222,6 +244,9 @@ def plotResults(
         lower_bound = None, 
         upper_bound = None, 
     ):
+
+    errorValues = np.abs(xValues - zValues) if errorValues is None else errorValues
+
     fig, ax = plt.subplots(2, 2, figsize=(10, 10))
 
     for i in range(stateN):
@@ -251,11 +276,15 @@ def plotResults(
     if SAVE and folder is not None and simName is not None:
         df_state = pd.DataFrame(data=xValues.transpose(), columns=['x' + str(i) for i in range(stateN)])
         df_error = pd.DataFrame(data=errorValues.transpose(), columns=['error' + str(i) for i in range(stateN)])
-        df_variance = pd.DataFrame(data=varianceValues.transpose(), columns=['variance' + str(i) for i in range(stateN)])
+        #df_variance = pd.DataFrame(data=varianceValues.transpose(), columns=['variance' + str(i) for i in range(stateN)])
         df_time = pd.DataFrame(data=time, columns=['time'])
         df_measurement = pd.DataFrame(data=zValues.transpose(), columns=['z' + str(i) for i in range(stateN)])
-        df_mu = pd.DataFrame(data=muValues.transpose(), columns=['mu' + str(i) for i in range(modeN)])
-        df = pd.concat([df_time, df_measurement, df_state, df_variance, df_error, df_mu], axis=1)
+        if MULTI_MODEL:
+            df_mu = pd.DataFrame(data=muValues.transpose(), columns=['mu' + str(i) for i in range(modeN)])
+        if MULTI_MODEL:
+            df = pd.concat([df_time, df_measurement, df_state, df_error, df_mu], axis=1)
+        else:
+            df = pd.concat([df_time, df_measurement, df_state, df_error], axis=1)
 
         df.to_csv(folder + simName + '_data.csv', index=False)
 
@@ -263,7 +292,7 @@ def plotResults(
     plt.show()
 
 
-model = createFilter(stateN, measN, modeN, dt, xD, dxD, sigma_x, sigma_y, params, mu, trans, S)
+model = createFilter(stateN, measN, modeN, dt, xD, dxD, sigma_x, sigma_y, params, mu, trans, S, GPModel)
 
 settings = {
     'stateN': stateN,

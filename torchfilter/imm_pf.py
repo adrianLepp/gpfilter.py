@@ -395,27 +395,27 @@ class IMMParticleFilter(torchfilter.base.Filter):
 
             output1 = self.dynamics_models[1].gp(self.dynamics_models[1].x_train)
             loss1 = -mll1(output1, self.dynamics_models[1].dx_train)
-            loss1.backward()
+            #loss1.backward()
 
 
             #mode loss
-            for i in range(self.dynamics_models[0].x_train.shape[0]):
-                self.initialize_beliefs(
-                    mean=self.dynamics_models[0].x_train[i][None],
-                    #covariance=torch.zeros(size=(self.dynamics_models[0].x_train.shape[0], self.state_dim, self.state_dim)) + torch.eye(self.state_dim)[None, :, :] * 1e-7,
-                    covariance = self.dynamics_models[0].Q[None, :, :].expand((self.dynamics_models[0].x_train[i][None].shape[0], self.state_dim, self.state_dim)) 
-                    + torch.eye(self.state_dim)[None, :, :] * 1e-7,
-                )
-                observations, _ =  self.measurement_model.kalman_filter_measurement_model(states=self.dynamics_models[0].x_train[i][None].reshape((-1, self.state_dim)))
+            # for i in range(self.dynamics_models[0].x_train.shape[0]):
+            #     self.initialize_beliefs(
+            #         mean=self.dynamics_models[0].x_train[i][None],
+            #         #covariance=torch.zeros(size=(self.dynamics_models[0].x_train.shape[0], self.state_dim, self.state_dim)) + torch.eye(self.state_dim)[None, :, :] * 1e-7,
+            #         covariance = self.dynamics_models[0].Q[None, :, :].expand((self.dynamics_models[0].x_train[i][None].shape[0], self.state_dim, self.state_dim)) 
+            #         + torch.eye(self.state_dim)[None, :, :] * 1e-7,
+            #     )
+            #     observations, _ =  self.measurement_model.kalman_filter_measurement_model(states=self.dynamics_models[0].x_train[i][None].reshape((-1, self.state_dim)))
 
-                #controls = torch.zeros(self.dynamics_models[0].x_train[i].shape[0], 1, 1)
-                controls = torch.zeros(1, 1)
+            #     #controls = torch.zeros(self.dynamics_models[0].x_train[i].shape[0], 1, 1)
+            #     controls = torch.zeros(1, 1)
 
-                output0s, output0m = self(
-                    observations=observations, controls=controls
-                )
-                loss0m = modeLoss(output0m[0])
-                loss0m.backward()
+            #     output0s, output0m = self(
+            #         observations=observations, controls=controls
+            #     )
+            #     loss0m = modeLoss(output0m[0])
+            #     loss0m.backward()
 
             #calculate output of one imm pf step. loss is wrong mode
 
