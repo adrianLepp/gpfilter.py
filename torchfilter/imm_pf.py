@@ -229,7 +229,7 @@ class IMMParticleFilter(torchfilter.base.Filter):
         self.particle_states = (
             torch.distributions.MultivariateNormal(
                 #loc=predicted_states, scale_tril=scale_trils
-                loc=predicted_states, scale_tril=noise
+                loc=predicted_states, scale_tril=scale_trils
             )
             .rsample()  # Note that we use `rsample` to make sampling differentiable
             .view(N, q, M, self.state_dim)
@@ -395,7 +395,7 @@ class IMMParticleFilter(torchfilter.base.Filter):
 
             output1 = self.dynamics_models[1].gp(self.dynamics_models[1].x_train)
             loss1 = -mll1(output1, self.dynamics_models[1].dx_train)
-            #loss1.backward()
+            loss1.backward()
 
 
             #mode loss

@@ -311,6 +311,12 @@ class GP_UKF(UnscentedKalmanFilter):
         self.Qfct = Qfct
     
     def predict(self, dt=None, UT=None, fx=None, **fx_args):
-        self.Q = self.Qfct(self.sigmas_f[0,:])
+        qSum = 0
+        for i in range(self._num_sigmas):
+            qSum += self.Qfct(self.sigmas_f[i,:]) 
+
+        self.Q = qSum / self._num_sigmas / 10
+        
+        #self.Q = self.Qfct(self.sigmas_f[0,:])
 
         super().predict(dt, UT, fx)

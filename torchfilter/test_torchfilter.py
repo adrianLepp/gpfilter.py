@@ -19,19 +19,19 @@ from test_filters import _run_filter
 from GP_BF import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
 
 
-GPModel = ConvolvedGPModel
+GPModel = BatchIndependentMultitaskGPModel
 
 verbose = True
-MULTI_MODEL = True
+MULTI_MODEL = False
 GP = True
-SAVE = True
+SAVE = False
 
 NORMALIZE = True
-OPTIM_STEPS = 10
+OPTIM_STEPS = 100
 
 folder = 'results/pf/'
-simName = 'threeTank_cgp'
-simCounter = 12
+simName = 'threeTank_lmc'
+simCounter = 21
 
 # -----------------------------------------------------------------------------
 # model settings
@@ -45,20 +45,32 @@ dt = 0.1
 T = 100
 
 #PF
-sigma_y = 1e-2
+sigma_y = 1e-3
 sigma_x = 1e-7
 S = 100
 
 #IMMM
 modeN = 2
-mu = [0.5, 0.5] 
-trans = torch.tensor([[0.9, 0.1], [0.1, 0.9]])
+#mu = [1/3, 1/3, 1/3] 
+# trans = torch.tensor([
+#     [0.9, 0.1, 0.1], 
+#     [0.1, 0.9, 0.1],
+#     [0.1, 0.1, 0.9],
+#     ])
+mu = [1/2, 1/2] 
+trans = torch.tensor([
+    [0.9, 0.1], 
+    [0.1, 0.9],
+    ])
 
 param2 = param.copy()
-param2['c13'] = param['c13'] * 4 
-param2['c32'] = param['c32'] * 4
-param2['c2R'] = param['c2R'] * 4
-param2['u'] = 0
+# param2['c13'] = param['c13'] * 4 
+# param2['c32'] = param['c32'] * 4
+# param2['c2R'] = param['c2R'] * 4
+param2['u'] = param['u'] * 0.5
+
+param3 = param.copy()
+param3['u'] = param['u'] * 2
 
 
 # -----------------------------------------------------------------------------
@@ -67,30 +79,44 @@ param2['u'] = 0
 
 metaParams = [
     {'T':T, 'downsample':10}, 
-    {'T':T, 'downsample':10}
+    {'T':T*3, 'downsample':30},
+#    {'T':T/2, 'downsample':10},
 ]
 
 params = [
     param, 
-    param2
+    param2,
+#    param3,
 ]
 
 #if GP:
-xD, yD, dxD, tsD = createTrainingData(ThreeTank, params, metaParams, stateN, dt, x0, multipleSets=MULTI_MODEL)
+xD, yD, dxD, tsD = createTrainingData(ThreeTank, params, metaParams, stateN, dt, x0, multipleSets=MULTI_MODEL, plot=True, startAgain=True)
+
+# df_time = pd.DataFrame(data=tsD, columns=['time'])
+# df_x = pd.DataFrame(data=xD.transpose(), columns=['x' + str(i) for i in range(stateN)])
+# df_dx = pd.DataFrame(data=dxD.transpose(), columns=['dx' + str(i) for i in range(stateN)])
+# df = pd.concat([df_time, df_x, df_dx], axis=1)
+
+# df.to_csv(folder + 'training_imm1' + '_data.csv', index=False)
 
 
 # -----------------------------------------------------------------------------
 # create test data
 #------------------------------------------------------------------------------
 
+paramT1 = param.copy()
+paramT1['u'] = param['u'] * 0.75
+
 metaParamT = [
-    {'T':T, 'downsample':1}, 
-    {'T':T, 'downsample':1}
+    {'T':40, 'downsample':1}, 
+    {'T':40, 'downsample':1},
+    {'T':40, 'downsample':1},
 ]
 
 paramT = [
     param, 
-    param2
+    paramT1,
+    param2,
 ]
 
 xT, yT, dxT, tsT = createTrainingData(ThreeTank, paramT, metaParamT, stateN, dt, x0, multipleSets=False, plot =False)

@@ -14,22 +14,23 @@ from helper import init_GP_UKF, init_UKF, createTrainingData
 import pandas as pd
 import json
 
-stateTransition, observation = getThreeTankEquations(param, observe= (True, False, False))
+stateTransition, observation = getThreeTankEquations(param, observe= (True, False, False))#TODO:
 # %%
 
-simCounter = 11
+simCounter = 4
 
 verbose = True
 MULTI_MODEL = False
 GP = True
-SAVE = False
+SAVE = True
 
 NORMALIZE = True
-OPTIM_STEPS = 20
+OPTIM_STEPS = 10
 
 
 gp_model = GP_SSM_gpytorch_multitask
-gp_type =  ConvolvedGPModel # MultitaskGPModel #  BatchIndependentMultitaskGPModel #  
+gp_type =    BatchIndependentMultitaskGPModel #MultitaskGPModel #   ConvolvedGPModel # 
+gp_model_name = '_ind_good'
 
 # %%
 
@@ -43,17 +44,17 @@ x0 = np.zeros(stateN) # initial state
 dt = 0.1
 
 #UKF
-alpha=.1
-beta=2.
-kappa=-1
-z_std = 5*1e-7
-x_std = 1e-9
-P = 1e-9 # initial uncertainty
+alpha=1 #.1
+beta=0 #2.
+kappa= 3-stateN # -1
+z_std = 1
+x_std = 1e-4
+P = 1e-5 # initial uncertainty
 
 #IMMM
 modeN = 2
-mu = [0.9, 0.1] 
-trans = np.array([[0.9999, 0.0001], [0.0001, 0.9999]])
+mu = [0.5, 0.5] 
+trans = np.array([[0.9, 0.1], [0.1, 0.9]])
 
 param2 = param.copy()
 param2['c13'] = param['c13'] * 4 
@@ -62,8 +63,8 @@ param2['c2R'] = param['c2R'] * 4
 param2['u'] = 0
 
 metaParams = [
-#    {'T':100, 'downsample':100}, 
-    {'T':100, 'downsample':10}
+    {'T':100, 'downsample':10}, 
+ #   {'T':100, 'downsample':10}
 ]
 
 params = [
@@ -75,6 +76,7 @@ params = [
 
 if GP:
     xD, yD, dxD, tsD = createTrainingData(ThreeTank, params, metaParams, stateN, dt, x0, multipleSets=MULTI_MODEL)
+
 
 # %%
 
@@ -119,7 +121,7 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
                 
                 models[i].optimize(OPTIM_STEPS, verbose)
         
-                filters.append(init_GP_UKF(x0, models[i].stateTransition, observation, stateN, measN, models[i].stateTransitionVariance,P, z_std, dt))
+                filters.append(init_GP_UKF(x0, models[i].stateTransition, observation, stateN, measN, models[i].stateTransitionVariance,P, z_std, 1))
         
         else:
             for i in range(modeN):
@@ -132,7 +134,8 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
     else:
         model = gp_model(dxD.transpose(), xD.transpose(), stateN, normalize=NORMALIZE, model=gp_type)
         model.optimize(OPTIM_STEPS, verbose)
-        gp_filter  = init_GP_UKF(x0, model.stateTransition, observation, stateN, measN, model.stateTransitionVariance,P, z_std, dt)
+        gp_filter  = init_GP_UKF(x0, model.stateTransition, observation, stateN, measN, model.stateTransitionVariance,P, z_std, 1)
+        #gp_filter = init_UKF(x0, model.stateTransition, observation , stateN, measN,  x_std, P, z_std, 1)
         return gp_filter, model
 
 filter, model = createFilter(modeN, x_std, z_std, P, mu , trans, observation)
@@ -157,7 +160,7 @@ settings = {
 
 simName = 'threeTank'
 if GP:
-    simName += '_gp'
+    simName += '_gp' + gp_model_name
     settings['gp'] ={
     'optimSteps' :OPTIM_STEPS,
     'normalize': NORMALIZE,
@@ -174,7 +177,7 @@ if MULTI_MODEL:
     }
 
 simName += '_' + str(simCounter)
-folder = 'results/'
+folder = 'results/ukf/'
 
 dataName = folder + simName + 'settings'
 
@@ -184,6 +187,15 @@ if SAVE:
 
 #df_settings = pd.DataFrame(data=settings)
 #df_settings.to_json(folder + simName + 'settings.json')
+
+# df_time = pd.DataFrame(data=tsD, columns=['time'])
+# df_x = pd.DataFrame(data=xD.transpose(), columns=['x' + str(i) for i in range(stateN)])
+# df_dx = pd.DataFrame(data=dxD.transpose(), columns=['dx' + str(i) for i in range(stateN)])
+# df = pd.concat([df_time, df_x, df_dx], axis=1)
+
+# df.to_csv(folder + 'training_imm1' + '_data.csv', index=False)
+
+
 
 # -----------------------------------------------------------------------------
 # run prediction
@@ -201,8 +213,8 @@ def runPrediction(stateN, modeN, filter, zValues:np.ndarray, time:np.ndarray):
     for i in range(simLength):
         # perform predict/update cycle
         filter.predict()
-        meas = zValues[0,i] 
-        filter.update(meas)#TODO change this
+        meas = zValues[0,i]#TODO change this 
+        filter.update(meas)
 
         if MULTI_MODEL:
             muValues[:,i] = filter.mu
@@ -210,7 +222,7 @@ def runPrediction(stateN, modeN, filter, zValues:np.ndarray, time:np.ndarray):
         xValues[:,i] = filter.x
         errorValues[:,i] = np.abs(filter.x - zValues[:,i])
         varianceValues[:,i] = np.diag(filter.P_post)
-        likelihoodValues[:,i] = filter.likelihood
+       # likelihoodValues[:,i] = filter.likelihood
 
     lower_bound = xValues - 1.96 * np.sqrt(varianceValues)
     upper_bound = xValues + 1.96 * np.sqrt(varianceValues)
@@ -219,15 +231,15 @@ def runPrediction(stateN, modeN, filter, zValues:np.ndarray, time:np.ndarray):
     for i in range(stateN):
         ax[0,0].plot(time, zValues[i, :], label='$z_' + str(i) + '$')
         ax[0,0].plot(time, xValues[i, :], '--', label='$x_' + str(i) + '$')
-        ax[0,0].fill_between(time, lower_bound[i, :], upper_bound[i, :], color='gray', alpha=0.5, label='$95\%$ CI' if i == 0 else "")
+        #ax[0,0].fill_between(time, lower_bound[i, :], upper_bound[i, :], color='gray', alpha=0.5, label='$95\%$ CI' if i == 0 else "")
     ax[0,0].legend()
 
     for i in range(stateN):
         ax[0,1].plot(time, errorValues[i, :], label='$error_' + str(i) + '$')
     ax[0,1].legend()
 
-    ax[1,0].plot(time, likelihoodValues[0,:], label='likelihood')
-    ax[1,0].legend()
+    # ax[1,0].plot(time, likelihoodValues[0,:], label='likelihood')
+    # ax[1,0].legend()
 
     if MULTI_MODEL:
         #fig2, ax[0,1] = plt.subplots(1, 1, figsize=set_size(textWidth, 0.5,(1,1)))
@@ -243,8 +255,11 @@ def runPrediction(stateN, modeN, filter, zValues:np.ndarray, time:np.ndarray):
         df_variance = pd.DataFrame(data=varianceValues.transpose(), columns=['variance' + str(i) for i in range(stateN)])
         df_time = pd.DataFrame(data=time, columns=['time'])
         df_measurement = pd.DataFrame(data=zValues.transpose(), columns=['z' + str(i) for i in range(stateN)])
-        df_mu = pd.DataFrame(data=muValues.transpose(), columns=['mu' + str(i) for i in range(modeN)])
-        df = pd.concat([df_time, df_measurement, df_state, df_variance, df_error, df_mu], axis=1)
+        if MULTI_MODEL:
+            df_mu = pd.DataFrame(data=muValues.transpose(), columns=['mu' + str(i) for i in range(modeN)])
+            df = pd.concat([df_time, df_measurement, df_state, df_variance, df_error, df_mu], axis=1)
+        else:
+            df = pd.concat([df_time, df_measurement, df_state, df_variance, df_error], axis=1)
 
         df.to_csv(folder + simName + '_data.csv', index=False)
 
@@ -258,12 +273,12 @@ param3['c2R'] = param['c2R'] * 1.5
 
 testParam = [
     param, 
-    #param2
+#    param2
     ]
 
 metaParams = [
     {'T':100, 'downsample':1}, 
-    #{'T':500, 'downsample':1}, 
+    #{'T':50, 'downsample':1}, 
 ]
 
 xSim, ySim, dxSim, tsSim = createTrainingData(ThreeTank, testParam, metaParams, stateN, dt, x0, multipleSets=False, plot=False)

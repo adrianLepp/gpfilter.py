@@ -53,7 +53,7 @@ def init_UKF(x, fx, hx , n, m,  x_std, P, z_std, dt, alpha=.1, beta=2., kappa=-1
 #------------------------------------------------------------------------------
 
 # %%
-def createTrainingData(system, paramSets, metaParams, stateN, dt, x0, multipleSets=False, plot=True):
+def createTrainingData(system, paramSets, metaParams, stateN, dt, x0, multipleSets=False, plot=True, startAgain=False):
     yD = []
     dxD = []
     xD = []
@@ -70,7 +70,8 @@ def createTrainingData(system, paramSets, metaParams, stateN, dt, x0, multipleSe
         dxData[:, 0] = xData[:, 0] - x0
         tsData += T
         T = tsData[-1]
-        x0 = xData[:, -1]
+        if not startAgain:
+            x0 = xData[:, -1]
 
         xD.append(xData[:, ::metaParam['downsample']])
         yD.append(yData[:, ::metaParam['downsample']])
