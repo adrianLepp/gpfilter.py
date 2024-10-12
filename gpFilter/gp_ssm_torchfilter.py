@@ -1,6 +1,5 @@
 import torchfilter
 from torchfilter import types
-from torchfilter.base import DynamicsModel
 import torch
 import torch.nn as nn
 from typing import Tuple, cast
@@ -8,26 +7,8 @@ import gpytorch
 
 gpytorch.settings.debug(False)
 
-from GP_BF import MultitaskGPModel, BatchIndependentMultitaskGPModel
+from multi_gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
 from util import normalize_min_max_torch, denormalize_min_max
-
-# class MultiTaskGP_DynamicsModel(MultitaskGPModel, DynamicsModel):
-#     def __init__(self, 
-#                  state_dim:int, 
-#                  dt:int,
-#                  xData, 
-#                  dxData,
-#                  sigma_x, 
-#                  kern = None, 
-#                  likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood,
-#                  model =  BatchIndependentMultitaskGPModel, #MultitaskGPModel, #
-#                  normalize = False, 
-#                  trainable: bool = False
-#     ):
-#         DynamicsModel.__init__(self, state_dim=state_dim)
-#         MultitaskGPModel.__init__(self.x_train , self.dx_train , self.likelihood, num_tasks=self.state_dim)
-
-        
 
 class GpDynamicsModel(torchfilter.base.DynamicsModel):
     """Forward model for our GP system. Maps (initial_states, controls) pairs to
@@ -45,7 +26,7 @@ class GpDynamicsModel(torchfilter.base.DynamicsModel):
                  sigma_x, 
                  kern = None, 
                  likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood,
-                 model =  BatchIndependentMultitaskGPModel, #MultitaskGPModel, #
+                 model =  BatchIndependentMultitaskGPModel, 
                  normalize = False, 
                  trainable: bool = False
     ):
@@ -142,16 +123,9 @@ class GpDynamicsModel(torchfilter.base.DynamicsModel):
         x = self.normalize(initial_states, self.norm_param_x)
             
         with torch.no_grad(), gpytorch.settings.fast_pred_var(), gpytorch.settings.debug(False):
-            #dx = self.gp.mean_module(torch.tensor(x).float())
             predictions = self.likelihood(self.gp(x))
             dx = predictions.mean
             var = predictions.stddev.diag_embed()
-        
-        # if dx.shape[1] == 1:
-        #     dx = dx.transpose()
-
-        # if var.shape[1] == 1:
-        #     var =torch.diagflat(var)
 
         var = self.denormalize(var, self.norm_param_dx)
         dx = self.denormalize(dx, self.norm_param_dx)

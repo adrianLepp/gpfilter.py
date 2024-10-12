@@ -1,13 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Aug  1 14:36:50 2024
-
-@author: alepp
-
-
-this will become a lib once
-"""
 import torch
 import numpy as np
 
@@ -66,6 +56,6 @@ def normalize_min_max_torch(data:torch.tensor, min_val:float=None, delta:float=N
             if delta == 0:
                 delta = 1
 
-    normalized_data = (data - min_val) / delta #(max_val - min_val)
+    normalized_data = (data - min_val) / delta
     return normalized_data, (min_val, delta)
 

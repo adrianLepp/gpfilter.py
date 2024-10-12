@@ -2,14 +2,10 @@
 from filterpy.kalman import UnscentedKalmanFilter, MerweScaledSigmaPoints
 from filterpy.common import Q_discrete_white_noise
 import numpy as np
-from GP_BF import GP_UKF
+from gp_ssm_filterpy import GP_UKF
 from dynamicSystem import simulateNonlinearSSM
 import matplotlib.pyplot as plt
 
-#plt.style.use('seaborn')
-#plt.style.use('tex')
-# in LaTex show the textWidth with '\the\textwidth'
-textWidth= 469.4704
 
 #--------------------------------------------------------------------------------
 # init Filters
@@ -83,10 +79,8 @@ def createTrainingData(system, paramSets, metaParams, stateN, dt, x0, multipleSe
     dxData = np.concatenate((dxD), axis=1)
     tsData = np.concatenate((tsD))
 
-    #with plt.ion():
     if plot:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6))
-        #fig, (ax1, ax2) = plt.subplots(2, 1, figsize=set_size(textWidth, 0.5,(1,2)))
 
         for i in range(stateN):
             ax1.plot(tsData, yData[i], 'x', label='y' + str(i))
@@ -100,11 +94,8 @@ def createTrainingData(system, paramSets, metaParams, stateN, dt, x0, multipleSe
         ax2.set_ylabel('dx')
         ax2.legend()
 
-        #fig.tight_layout()
         fig.show()
         fig.suptitle('Training Data')
-
-        #fig.savefig('../gaussianProcess.tex/img/TrainingData.pdf', format='pdf', bbox_inches='tight')#FIXME
 
     if multipleSets:
         return xD, yD, dxD, tsD
