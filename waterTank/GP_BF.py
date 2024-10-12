@@ -13,7 +13,7 @@ DEBUG = False
 
 class MultitaskGPModel(gpytorch.models.ExactGP):
     '''
-    TODO: this is ALMOST a duplicate from https://docs.gpytorch.ai/en/stable/examples/03_Multitask_Exact_GPs/Multitask_GP_Regression.html
+    this is ALMOST a duplicate from https://docs.gpytorch.ai/en/stable/examples/03_Multitask_Exact_GPs/Multitask_GP_Regression.html
     '''
     def __init__(self, train_x, train_y, likelihood, num_tasks):
         super(MultitaskGPModel, self).__init__(train_x, train_y, likelihood)
@@ -31,7 +31,7 @@ class MultitaskGPModel(gpytorch.models.ExactGP):
     
 class BatchIndependentMultitaskGPModel(gpytorch.models.ExactGP):
     '''
-    TODO: this is ALMOST a duplicate from https://docs.gpytorch.ai/en/stable/examples/03_Multitask_Exact_GPs/Multitask_GP_Regression.html
+    this is ALMOST a duplicate from https://docs.gpytorch.ai/en/stable/examples/03_Multitask_Exact_GPs/Multitask_GP_Regression.html
     '''
     def __init__(self, train_x, train_y, likelihood, num_tasks):
         super().__init__(train_x, train_y, likelihood)
@@ -49,10 +49,9 @@ class BatchIndependentMultitaskGPModel(gpytorch.models.ExactGP):
         )
 
 class ConvolvedGPModel(gpytorch.models.ExactGP):
-    def __init__(self, train_x, train_y, likelihood, num_tasks):
+    def __init__(self, train_x, train_y, likelihood, num_tasks, num_latents=2):
         super().__init__(train_x, train_y, likelihood)
 
-        num_latents=2
         num_inputs= num_tasks
         self.mean_module = gpytorch.means.MultitaskMean(
             gpytorch.means.ConstantMean(), num_tasks=num_tasks

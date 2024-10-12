@@ -19,19 +19,19 @@ from test_filters import _run_filter
 from GP_BF import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
 
 
-GPModel = BatchIndependentMultitaskGPModel
+GPModel = ConvolvedGPModel
 
 verbose = True
-MULTI_MODEL = False
+MULTI_MODEL = True
 GP = True
 SAVE = False
 
 NORMALIZE = True
-OPTIM_STEPS = 100
+OPTIM_STEPS = (10,10)
 
 folder = 'results/pf/'
-simName = 'threeTank_lmc'
-simCounter = 21
+simName = '3mode'
+simCounter = 30
 
 # -----------------------------------------------------------------------------
 # model settings
@@ -97,7 +97,7 @@ xD, yD, dxD, tsD = createTrainingData(ThreeTank, params, metaParams, stateN, dt,
 # df_dx = pd.DataFrame(data=dxD.transpose(), columns=['dx' + str(i) for i in range(stateN)])
 # df = pd.concat([df_time, df_x, df_dx], axis=1)
 
-# df.to_csv(folder + 'training_imm1' + '_data.csv', index=False)
+# df.to_csv(folder + 'training_imm2' + '_data.csv', index=False)
 
 
 # -----------------------------------------------------------------------------
@@ -108,9 +108,9 @@ paramT1 = param.copy()
 paramT1['u'] = param['u'] * 0.75
 
 metaParamT = [
-    {'T':40, 'downsample':1}, 
-    {'T':40, 'downsample':1},
-    {'T':40, 'downsample':1},
+    {'T':50, 'downsample':1}, 
+    {'T':50, 'downsample':1},
+    {'T':50, 'downsample':1},
 ]
 
 paramT = [
@@ -154,7 +154,7 @@ def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:f
                     model=GPModel,
                     normalize=NORMALIZE
                 )
-                #gpModel.optimize(verbose=False, iterations=OPTIM_STEPS)
+                gpModel.optimize(verbose=verbose, iterations=OPTIM_STEPS[i])
                 models.append(gpModel)
         else:
             for i in range(modeN):
@@ -171,8 +171,8 @@ def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:f
         )
         # for param_name, param in imm.dynamics_models[0].gp.named_parameters():
         #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
-        if GP:
-            imm.optimize(OPTIM_STEPS, verbose)
+        #if GP:
+            #imm.optimize(OPTIM_STEPS, verbose)
         # for param_name, param in imm.dynamics_models[0].gp.named_parameters():
         #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
 
