@@ -1,0 +1,29 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: 'Interacting Multiple Model Gaussian Process Bayes Filter '
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Adrian
+    family-names: Lepp
+repository-code: 'https://github.com/adrianLepp/imm-gp-bf.py'
+abstract: >-
+  Implementation of the gaussian process state space model
+  (gp-ssm) to use in filters (ukf, pf, imm,...) and an
+  interacting multiple model particle filter (imm-pf) based
+  on torchfilter
+keywords:
+  - gaussian process
+  - particle filter
+  - state estimation
+  - interacting multiple model
+  - unscented kalman filter
+  - hybrid state estimation
+  - pytorch
+  - torchfilter
+  - gpytorch
+license: MIT
