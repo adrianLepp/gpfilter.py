@@ -11,8 +11,8 @@ class IMMParticleFilter(torchfilter.base.Filter):
     """
     Generic differentiable interacting multiple model particle filter.
     The code is based on torchfilter.filters.ParticleFilter
-    The algorithm is based on the paper A. Lepp und D. Weidemann. Interacting-Multiple-Model Partikelfilter zur Fehleridentifikation“. 
-    In: ASIM 2022. testAdress, Jan. 2022, S. 187–194. doi: 10.11128/arep.20.a2024.
+    The algorithm is based on the paper A. Lepp und D. Weidemann. Interacting-Multiple-Model Partikelfilter zur Fehleridentifikation. 
+    In: ASIM 2022. testAdress, Jan. 2022, S. 187-194. doi: 10.11128/arep.20.a2024.
     """
 
     def __init__(
