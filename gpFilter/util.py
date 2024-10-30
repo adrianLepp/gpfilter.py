@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from scipy.linalg import cholesky
 
 
 # %% mean std
@@ -59,3 +60,23 @@ def normalize_min_max_torch(data:torch.tensor, min_val:float=None, delta:float=N
     normalized_data = (data - min_val) / delta
     return normalized_data, (min_val, delta)
 
+def fix_nonpositive_definite(a):
+    EPS = 1e-6;
+    ZERO = 1e-10;
+    [eigenval,eigenvec] = np.linalg.eig(a)
+    
+    for n in range(len(eigenval)):
+        if eigenval[n] <= ZERO:
+            eigenval[n] = EPS
+
+    sigma = eigenvec * np.diag(eigenval) * eigenvec.T
+
+    return sigma
+
+def cholesky_fix(a, lower:bool=False, overwrite_a:bool=False, check_finite:bool=True):
+    try:
+        return cholesky(a, lower, overwrite_a, check_finite)
+    except np.linalg.LinAlgError as inst:
+        idx = int(inst.args[0][0])
+        a[0:idx,0:idx] = fix_nonpositive_definite(a[0:idx,0:idx])
+        return cholesky_fix(a, lower, overwrite_a, check_finite)

@@ -5,6 +5,7 @@ import numpy as np
 from gp_ssm_filterpy import GP_UKF
 from dynamicSystem import simulateNonlinearSSM
 import matplotlib.pyplot as plt
+from util import cholesky_fix
 
 
 #--------------------------------------------------------------------------------
@@ -15,7 +16,7 @@ def init_GP_UKF(x, fx, hx, n ,m,  Qfct, P, z_std, dt, alpha=.1, beta=2., kappa=-
     R = np.diag([z_std**2] * m)
 
     # create sigma points to use in the filter. This is standard for Gaussian processes
-    points = MerweScaledSigmaPoints(n, alpha, beta, kappa)
+    points = MerweScaledSigmaPoints(n, alpha, beta, kappa, sqrt_method=cholesky_fix)
 
     gp_ukf = GP_UKF(dim_x=n, dim_z=m, dt=dt, fx=fx, hx=hx, Qfct=Qfct, points=points)
     #              sqrt_fn=None, x_mean_fn=None, z_mean_fn=None,

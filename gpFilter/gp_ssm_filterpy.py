@@ -5,7 +5,7 @@ import GPy
 import torch
 import gpytorch
 from abc import ABC, abstractmethod
-from util import normalize_min_max_np, denormalize_min_max
+from util import normalize_min_max_np, denormalize_min_max, cholesky_fix
 from multi_gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
 
 DEBUG = False
@@ -125,7 +125,7 @@ class GP_SSM_gpytorch(GP_SSM):
 class GP_UKF(UnscentedKalmanFilter):
     def __init__(self, dim_x, dim_z, dt, hx, fx, points, Qfct):
 
-        super().__init__(dim_x, dim_z, dt, hx, fx, points)
+        super().__init__(dim_x, dim_z, dt, hx, fx, points, sqrt_fn=cholesky_fix)
         self.Qfct = Qfct
     
     def predict(self, dt=None, UT=None, fx=None, **fx_args):
