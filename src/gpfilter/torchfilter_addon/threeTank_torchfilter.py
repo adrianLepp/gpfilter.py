@@ -3,7 +3,7 @@ from torchfilter import types
 import torch
 import torch.nn as nn
 from typing import Tuple, cast
-from system.threeTank import parameter
+from gpfilter.system.threeTank import parameter
 
 # parameter = {
 #     'u': 1.2371e-4,

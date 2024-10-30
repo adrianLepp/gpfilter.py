@@ -7,11 +7,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import json
 # --------------------------------------------------------------------------------
-from system import ThreeTank
-from system.threeTank import parameter as param
-from utils.helper import createTrainingData
-from torchfilter_addon import IdentityParticleFilterMeasurementModel, GpDynamicsModel, ThreeTankDynamicsModel, IMMParticleFilter
-from gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
+from gpfilter.system import ThreeTank
+from gpfilter.system.threeTank import parameter as param
+from gpfilter.utils.helper import createTrainingData
+from gpfilter.torchfilter_addon import IdentityParticleFilterMeasurementModel, GpDynamicsModel, ThreeTankDynamicsModel, IMMParticleFilter
+from gpfilter.gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
 
 
 GPModel = MultitaskGPModel

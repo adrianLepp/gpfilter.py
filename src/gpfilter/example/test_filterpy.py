@@ -4,11 +4,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import json
 # --------------------------------------------------------------------------------
-from system.threeTank import getSystemEquations,  parameter as param
-from system import ThreeTank
-from filterpy_addon import GP_SSM_gpytorch
-from gp import BatchIndependentMultitaskGPModel, MultitaskGPModel, ConvolvedGPModel
-from utils.helper import init_GP_UKF, init_UKF, createTrainingData
+from gpfilter.system.threeTank import getSystemEquations,  parameter as param
+from gpfilter.system import ThreeTank
+from gpfilter.filterpy_addon import GP_SSM_gpytorch
+from gpfilter.gp import BatchIndependentMultitaskGPModel, MultitaskGPModel, ConvolvedGPModel
+from gpfilter.utils.helper import init_GP_UKF, init_UKF, createTrainingData
 
 stateTransition, observation = getSystemEquations(param, observe= (True, False, False))
 # %%

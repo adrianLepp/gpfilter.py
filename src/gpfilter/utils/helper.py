@@ -4,9 +4,9 @@ from filterpy.common import Q_discrete_white_noise
 import numpy as np
 import matplotlib.pyplot as plt
 # --------------------------------------------------------------------------------
-from filterpy_addon import GP_UKF
-from system import simulateNonlinearSSM
-from utils import cholesky_fix
+from gpfilter.filterpy_addon import GP_UKF
+from gpfilter.system import simulateNonlinearSSM
+from gpfilter.utils import cholesky_fix
 
 
 #--------------------------------------------------------------------------------

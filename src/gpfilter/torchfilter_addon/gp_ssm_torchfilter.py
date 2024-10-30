@@ -6,8 +6,8 @@ from typing import Tuple, cast
 import gpytorch
 gpytorch.settings.debug(False)
 # --------------------------------------------------------------------------------
-from gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
-from utils import normalize_min_max_torch, denormalize_min_max
+from gpfilter.gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
+from gpfilter.utils import normalize_min_max_torch, denormalize_min_max
 
 class GpDynamicsModel(torchfilter.base.DynamicsModel):
     """Forward model for our GP system. Maps (initial_states, controls) pairs to
