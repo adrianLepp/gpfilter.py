@@ -20,10 +20,6 @@ class IdentityKalmanFilterMeasurementModel(torchfilter.base.KalmanFilterMeasurem
         # For training tests: if we want to learn this model, add an output bias
         # parameter so there's something to compute gradients for
 
-        #observable = tuple([True] * state_dim)
-
-        # assert state_dim == observation_dim
-        #self.C = torch.eye(state_dim)
         self.C = torch.zeros((observation_dim, state_dim))
         j = 0
         for i in range(len(observable)):

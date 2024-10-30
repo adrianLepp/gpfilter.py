@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imm-gp-bf"
+version = "0.0.1"
+authors = [
+  { name="adrianLepp", email="leppadrian@outlook.de" },
+]
+description = "interacting multiple model bayesian filtering with gaussian processes"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+license = {file = "LICENSE"}
+dependencies = [
+    "numpy",
+    "scipy",
+    "filterpy",
+    "GPy",
+    "torch",
+    "gpytorch",
+    "torchfilter @ git+ssh://git@github.com/stanford-iprl-lab/torchfilter.git",
+    "matplotlib",
+    "fannypack",
+    "overrides",
+    "pytest",
+    "pandas"
+]
+
+[project.urls]
+Homepage = "https://github.com/adrianLepp/imm-gp-bf.py"
+
+[tool.setuptools]
+packages = ["imm-gp-bf"]

@@ -54,11 +54,6 @@ class ThreeTank():
                 y.append(x[i] + random.normal(0, 1) * self.sigmaY)
         if len(y) == 0:
             return [x[0] + x[1] + x[2] + random.normal(0, 1) * self.sigmaY ]
-        # y1 = x[0] + random.normal(0, 1) * self.sigmaY
-        # y2 = x[1] + random.normal(0, 1) * self.sigmaY
-        # y3 = x[2] + random.normal(0, 1) * self.sigmaY
-        # return [y1 , y2, y3]
-
         return y
     
     
@@ -69,7 +64,6 @@ def getThreeTankEquations(param=parameter, observe= (True, True, True)):
     nonlinear state transition for the three tank system
     returns the next state vector for the given state vector x and time step dt
     this is used by filterPy
-    TODO: One should give the option for different solvers like RK45 (this is one step euler method)
     '''
     def stateTransition(x, dt):
         dx = threeTank.stateTransition(0,x)
@@ -84,52 +78,3 @@ def getThreeTankEquations(param=parameter, observe= (True, True, True)):
         return threeTank.observation(x, observe)
     
     return stateTransition, observation
-
-
-
-# linearized form
-# calculations are from Hennin Borchard, Praktikum Zustandsregelungen 2020, Hochschule Bielefeld
-
-x = [0,0,0]
-
-# rest position
-u_r  = parameter['u']*0.3 
-
-
-
-x_r1=(1+2*(parameter['c2R']/parameter['c32'])**2)*(1)/(2*parameter['g']*parameter['c2R']**2)*u_r**2
-x_r2=u_r**2/(2*parameter['g']*parameter['c2R']**2)
-x_r3=(1+(parameter['c2R']/parameter['c32'])**2)*(1)/(2*parameter['g']*parameter['c2R']**2)*u_r**2
-
-x_r=[x_r1, x_r2, x_r3]
-
-# linear system matrix in rest position:
-
-# dx  =Ax + Bu
-# dx = A_r * (x - x_r) + B_r * (u - u_r)
-
-# first line
-a11=-parameter['c13']*parameter['g']/parameter['A']*1/(sqrt(2*parameter['g']*(x_r1-x_r3)))
-a12=0
-a13=parameter['c13']*parameter['g']/parameter['A']*1/(sqrt(2*parameter['g']*(x_r1-x_r3)))
-
-#second line
-a21=0
-a22=-parameter['c32']*parameter['g']/parameter['A']*1/(sqrt(2*parameter['g']*(x_r3-x_r2)))-(parameter['c2R']*parameter['g'])/parameter['A']*1/(sqrt(2*parameter['g']*x_r2))
-a23=parameter['c32']*parameter['g']/parameter['A']*1/(sqrt(2*parameter['g']*(x_r3-x_r2)))
-
-#third line
-a31=parameter['c13']*parameter['g']/parameter['A']*1/(sqrt(2*parameter['g']*(x_r1-x_r3)))
-a32=parameter['c32']*parameter['g']/parameter['A']*1/(sqrt(2*parameter['g']*(x_r3-x_r2)))
-a33=-parameter['c13']*parameter['g']/parameter['A']*1/(sqrt(2*parameter['g']*(x_r1-x_r3)))-parameter['c32']*parameter['g']/parameter['A']*1/(sqrt(2*parameter['g']*(x_r3-x_r2))) 
-
-A_r=[[a11, a12, a13],
-   [a12, a22 ,a23],
-   [a31, a32 ,a33]]
-
-b_r=[1/parameter['A'], 0, 0]   #df/du
-
-# x_d = x - x_r
-# u_d = parameter['u'] - u_r
-
-# change the form of the system to A_t = [x; u] = 0, where A_t contains differential operators

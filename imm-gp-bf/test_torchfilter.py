@@ -11,12 +11,11 @@ import json
 from threeTank import ThreeTank, parameter as param
 from helper import createTrainingData
 from measurement import IdentityParticleFilterMeasurementModel
-from gp_ssm import GpDynamicsModel
-from threeTank_pytorch import ThreeTankDynamicsModel
+from gp_ssm_torchfilter import GpDynamicsModel
+from threeTank_torchfilter import ThreeTankDynamicsModel
 from imm_pf import IMMParticleFilter
-from test_filters import _run_filter
 
-from GP_BF import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
+from multi_gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
 
 
 GPModel = ConvolvedGPModel
@@ -169,12 +168,6 @@ def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:f
             state_dim= stateN,
             num_particles=S,
         )
-        # for param_name, param in imm.dynamics_models[0].gp.named_parameters():
-        #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
-        #if GP:
-            #imm.optimize(OPTIM_STEPS, verbose)
-        # for param_name, param in imm.dynamics_models[0].gp.named_parameters():
-        #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
 
         return imm
 
@@ -194,6 +187,46 @@ def createFilter(stateN:int, measN:int, modeN: int, dt:float, xD, dxD, sigma_x:f
             measurement_model=meas_model
         )
         return pf
+    
+def _run_filter(
+    filter_model: torchfilter.base.Filter,
+    data: Tuple[
+        types.StatesTorch, types.ObservationsNoDictTorch, types.ControlsNoDictTorch
+    ],
+    initialize_beliefs: bool = True,
+) -> torch.Tensor:
+    """Helper for running a filter and returning estimated states.
+
+    Args:
+        filter_model (torchfilter.base.Filter): Filter to run.
+        data (Tuple[
+            types.StatesTorch, types.ObservationsNoDictTorch, types.ControlsNoDictTorch
+        ]): Data to run on. Shapes of all inputs should be `(T, N, *)`.
+
+    Returns:
+        torch.Tensor: Estimated states. Shape should be `(T - 1, N, state_dim)`.
+    """
+
+    # Get data
+    states, observations, controls = data
+    T, N, state_dim = states.shape
+
+    # Initialize the filter belief to match the first timestep
+    if initialize_beliefs:
+        filter_model.initialize_beliefs(
+            mean=states[0],
+            covariance=torch.zeros(size=(N, state_dim, state_dim))
+            + torch.eye(state_dim)[None, :, :] * 1e-7,
+        )
+
+    # Run the filter on the remaining `T - 1` timesteps
+    estimated_states = filter_model.forward_loop(
+        observations=observations[1:], controls=controls[1:]
+    )
+
+    # Check output and return
+    assert estimated_states.shape == (T - 1, N, state_dim)
+    return estimated_states
 
 def _run_imm_filter(
     filter_model: torchfilter.base.Filter,

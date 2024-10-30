@@ -2,14 +2,11 @@
 from filterpy.kalman import UnscentedKalmanFilter, MerweScaledSigmaPoints
 from filterpy.common import Q_discrete_white_noise
 import numpy as np
-from GP_BF import GP_UKF
+from gp_ssm_filterpy import GP_UKF
 from dynamicSystem import simulateNonlinearSSM
 import matplotlib.pyplot as plt
+from util import cholesky_fix
 
-#plt.style.use('seaborn')
-#plt.style.use('tex')
-# in LaTex show the textWidth with '\the\textwidth'
-textWidth= 469.4704
 
 #--------------------------------------------------------------------------------
 # init Filters
@@ -19,7 +16,7 @@ def init_GP_UKF(x, fx, hx, n ,m,  Qfct, P, z_std, dt, alpha=.1, beta=2., kappa=-
     R = np.diag([z_std**2] * m)
 
     # create sigma points to use in the filter. This is standard for Gaussian processes
-    points = MerweScaledSigmaPoints(n, alpha, beta, kappa)
+    points = MerweScaledSigmaPoints(n, alpha, beta, kappa, sqrt_method=cholesky_fix)
 
     gp_ukf = GP_UKF(dim_x=n, dim_z=m, dt=dt, fx=fx, hx=hx, Qfct=Qfct, points=points)
     #              sqrt_fn=None, x_mean_fn=None, z_mean_fn=None,
@@ -83,10 +80,8 @@ def createTrainingData(system, paramSets, metaParams, stateN, dt, x0, multipleSe
     dxData = np.concatenate((dxD), axis=1)
     tsData = np.concatenate((tsD))
 
-    #with plt.ion():
     if plot:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6))
-        #fig, (ax1, ax2) = plt.subplots(2, 1, figsize=set_size(textWidth, 0.5,(1,2)))
 
         for i in range(stateN):
             ax1.plot(tsData, yData[i], 'x', label='y' + str(i))
@@ -100,11 +95,8 @@ def createTrainingData(system, paramSets, metaParams, stateN, dt, x0, multipleSe
         ax2.set_ylabel('dx')
         ax2.legend()
 
-        #fig.tight_layout()
         fig.show()
         fig.suptitle('Training Data')
-
-        #fig.savefig('../gaussianProcess.tex/img/TrainingData.pdf', format='pdf', bbox_inches='tight')#FIXME
 
     if multipleSets:
         return xD, yD, dxD, tsD

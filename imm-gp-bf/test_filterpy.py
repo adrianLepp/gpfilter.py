@@ -1,20 +1,14 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jul  4 09:22:05 2024
-
-@author: alepp
-"""
 from filterpy.kalman import IMMEstimator
 import numpy as np
 import matplotlib.pyplot as plt
 from threeTank import getThreeTankEquations, ThreeTank, parameter as param
-from GP_BF import GP_SSM_gpy_multiout, GP_SSM_gpy_LVMOGP, GP_SSM_gpytorch_multitask, BatchIndependentMultitaskGPModel, MultitaskGPModel, ConvolvedGPModel
+from gp_ssm_filterpy import GP_SSM_gpytorch
+from multi_gp import BatchIndependentMultitaskGPModel, MultitaskGPModel, ConvolvedGPModel
 from helper import init_GP_UKF, init_UKF, createTrainingData
 import pandas as pd
 import json
 
-stateTransition, observation = getThreeTankEquations(param, observe= (True, False, False))#TODO:
+stateTransition, observation = getThreeTankEquations(param, observe= (True, False, False))
 # %%
 
 simCounter = 4
@@ -22,13 +16,13 @@ simCounter = 4
 verbose = True
 MULTI_MODEL = False
 GP = True
-SAVE = True
+SAVE = False
 
 NORMALIZE = True
 OPTIM_STEPS = 10
 
 
-gp_model = GP_SSM_gpytorch_multitask
+gp_model = GP_SSM_gpytorch
 gp_type =    BatchIndependentMultitaskGPModel #MultitaskGPModel #   ConvolvedGPModel # 
 gp_model_name = '_ind_good'
 
@@ -84,27 +78,6 @@ if GP:
 # init Algorithm
 #------------------------------------------------------------------------------
 
-#trans = np.array([[1, 0], [0, 1]])
-
-
-# data = {
-#     'dx': dxD,
-#     'y': yD,
-# }
-# filterParam = {
-#     'modeN': modeN,
-#     'x_std': x_std,
-#     'z_std': z_std,
-#     'P': P,
-#     'mu': mu,
-#     'trans': trans
-# }
-
-# systemEquations = {
-#     'stateTransition': stateTransition,
-#     'observation': observation
-# }
-
 def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], trans:np.ndarray, observation):
 # init variables for IMM-GP-UKF
 
@@ -115,10 +88,7 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
             
             for i in range(modeN):
                 models.append(gp_model(dxD[i].transpose(), xD[i].transpose(), stateN, normalize=NORMALIZE, model=gp_type))
-                
-                # for param_name, param in models[0].gp.named_parameters():
-                #     print(f'Parameter name: {param_name:42} value = {param.data}') #.item()
-                
+
                 models[i].optimize(OPTIM_STEPS, verbose)
         
                 filters.append(init_GP_UKF(x0, models[i].stateTransition, observation, stateN, measN, models[i].stateTransitionVariance,P, z_std, 1))
@@ -135,7 +105,6 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
         model = gp_model(dxD.transpose(), xD.transpose(), stateN, normalize=NORMALIZE, model=gp_type)
         model.optimize(OPTIM_STEPS, verbose)
         gp_filter  = init_GP_UKF(x0, model.stateTransition, observation, stateN, measN, model.stateTransitionVariance,P, z_std, 1)
-        #gp_filter = init_UKF(x0, model.stateTransition, observation , stateN, measN,  x_std, P, z_std, 1)
         return gp_filter, model
 
 filter, model = createFilter(modeN, x_std, z_std, P, mu , trans, observation)
@@ -184,16 +153,6 @@ dataName = folder + simName + 'settings'
 if SAVE:
     with open(folder + simName + '_settings.json',"w") as f:
         json.dump(settings,f)
-
-#df_settings = pd.DataFrame(data=settings)
-#df_settings.to_json(folder + simName + 'settings.json')
-
-# df_time = pd.DataFrame(data=tsD, columns=['time'])
-# df_x = pd.DataFrame(data=xD.transpose(), columns=['x' + str(i) for i in range(stateN)])
-# df_dx = pd.DataFrame(data=dxD.transpose(), columns=['dx' + str(i) for i in range(stateN)])
-# df = pd.concat([df_time, df_x, df_dx], axis=1)
-
-# df.to_csv(folder + 'training_imm1' + '_data.csv', index=False)
 
 
 

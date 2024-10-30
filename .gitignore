@@ -3,3 +3,6 @@
 *.ini
 *.ini.bak
 *.spydata
+results
+*.egg-info
+.spyproject

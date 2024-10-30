@@ -7,10 +7,13 @@ import fannypack
 from overrides import overrides
 import gpytorch
 
-gpytorch.settings.debug(False)
-
 class IMMParticleFilter(torchfilter.base.Filter):
-    """Generic differentiable particle filter."""
+    """
+    Generic differentiable interacting multiple model particle filter.
+    The code is based on torchfilter.filters.ParticleFilter
+    The algorithm is based on the paper A. Lepp und D. Weidemann. Interacting-Multiple-Model Partikelfilter zur Fehleridentifikation. 
+    In: ASIM 2022. testAdress, Jan. 2022, S. 187-194. doi: 10.11128/arep.20.a2024.
+    """
 
     def __init__(
         self,
@@ -108,11 +111,6 @@ class IMMParticleFilter(torchfilter.base.Filter):
         for j in range(self.num_modes):
             self.particle_log_weights[:,j,:] =  np.log(self.mu[j]/self.num_particles)
 
-        # Normalize weights #TODO: weights need to add up to one over all modes
-        # self.particle_log_weights = self.particle_states.new_full(
-        #     #(N, self.num_modes,  self.num_particles), float(-np.log(self.num_particles * self.num_modes, dtype=np.float32))
-        #     (N, self.num_modes,  self.num_particles), float(np.log(self.mu[], self.num_particles, dtype=np.float32))
-        # )
         assert self.particle_log_weights.shape == (N, self.num_modes, self.num_particles)
 
         # Set initialized flag
@@ -160,7 +158,7 @@ class IMMParticleFilter(torchfilter.base.Filter):
         # particle set
         if not resample and self.num_particles != M:
             print.warn("expansio / contraction of particle set is not implemented!")
-            #TODO: implement this. Whatever it does
+            #TODO: implement this. 
 
 
         # Propagate particles through our dynamics model
@@ -171,11 +169,11 @@ class IMMParticleFilter(torchfilter.base.Filter):
         #
         # Currently each of the M particles within a "sample" get the same action, but
         # we could also add noise in the action space (a la Jonschkowski et al. 2018)
-        # reshaped_states = self.particle_states.reshape(-1, self.state_dim)
-        reshaped_states = self.particle_states.reshape(-1, self.num_particles, self.state_dim) #reduced to  q x M x state_dim
+
+        reshaped_states = self.particle_states.reshape(-1, self.num_particles, self.state_dim) 
         reshaped_controls = fannypack.utils.SliceWrapper(controls).map(
             lambda tensor: torch.repeat_interleave(tensor, repeats=M, dim=0)
-        ) #map controls to every particle: 100x1
+        ) 
 
         # 1. interaction step
         mPostK = self.particle_log_weights[:, :, :].exp().sum(dim=2)
@@ -202,13 +200,9 @@ class IMMParticleFilter(torchfilter.base.Filter):
             else:
                 sumW = wResampling[j,:].sum(dim=0)
                 for l in range(self.num_particles):
-                    #pos = find(torch.rand <= torch.cumsum(wResampling[j,:]),1)
-
-                    #pos = torch.nonzero(torch.cumsum(wResampling[j, :], dim=0) < torch.rand(1) * sumW)[0].item()
                     pos = torch.nonzero(torch.cumsum(wResampling[j, :], dim=0) >= torch.rand(1) * sumW)[0].item()
                     xPrio[:,j,l,:] = xResampling[pos,:]       
-                #
-            #
+
             # new prior weights
             wPrio[:,j,:] = torch.log(mPrioKK[:,j] / self.num_particles)
 
@@ -222,76 +216,39 @@ class IMMParticleFilter(torchfilter.base.Filter):
                 initial_states=reshaped_states[j,:,:], controls=reshaped_controls
             )
 
-        
-        noise = self.dynamics_models[0].Q[None, :, :].expand((N, self.state_dim, self.state_dim))#FIXME
-        
-        # #TODO: is this resampling here at the right place? What does it actually do? 
         self.particle_states = (
             torch.distributions.MultivariateNormal(
-                #loc=predicted_states, scale_tril=scale_trils
                 loc=predicted_states, scale_tril=scale_trils
             )
             .rsample()  # Note that we use `rsample` to make sampling differentiable
             .view(N, q, M, self.state_dim)
         )
-        #self.particle_states = predicted_states
         assert self.particle_states.shape == (N, q, M, self.state_dim)
-
 
         # 3. correction step Re-weight particles using observations
         weightCorrect = torch.zeros(N, self.num_modes, self.num_particles)
-
 
         for j in range(self.num_modes):
             weightCorrect[:,j,:] = self.measurement_model(
                 states=self.particle_states[:,j,:,:],
                 observations=observations,
             )
-            # self.particle_log_weights[:,j,:] = wPrio[:,j,:] + self.measurement_model(
-            #     states=self.particle_states[:,j,:,:],
-            #     observations=observations,
-            # )
+
         self.particle_log_weights = wPrio + weightCorrect
 
-        #print('correct. min', weightCorrect.min().item(), 'max', weightCorrect.max().item(), 'sum', weightCorrect.exp().sum(dim=(1,2)).item())
-
-
-        #print('norm const', torch.logsumexp(self.particle_log_weights, dim=(1,2), keepdim=True))
         # Normalize particle weights to sum to 1.0
         self.particle_log_weights = self.particle_log_weights - torch.logsumexp(
             self.particle_log_weights, dim=(1,2), keepdim=True 
         )
 
-        # self.particle_log_weights = self.particle_log_weights - torch.logsumexp(
-        #     self.particle_log_weights, dim=(1,2), keepdim=True 
-        # )
-
-        #print('weights . min', self.particle_log_weights.min().item(), 'max', self.particle_log_weights.max().item(), 'sum', self.particle_log_weights.exp().sum(dim=(1,2)).item())
-
         # Compute output
         state_estimates: types.StatesTorch
-        
-        #print('mode Probability', mPost)
-        #xEstM = torch.zeros(N, self.num_modes, self.state_dim)
 
         if self.estimation_method == "weighted_average":
             xEstM = (self.particle_log_weights[:, :, :, np.newaxis].exp()* self.particle_states[:, :, : ,: ]).sum(dim=2)
-    
-            # for j in range(self.num_modes):
-            #     xEstM[:,j,:] = torch.sum(
-            #         torch.exp(self.particle_log_weights[:, j, :, np.newaxis])
-            #         * self.particle_states[:, j, : ,: ],
-            #         dim=1,
-            #     )
             state_estimates = xEstM.sum(dim=1)
             modeEstimates = self.particle_log_weights.exp().sum(dim=2)
 
-        elif self.estimation_method == "argmax":
-            best_indices = torch.argmax(self.particle_log_weights, dim=2)
-            # state_estimates = torch.gather(
-            #     self.particle_states, dim=2, index=best_indices
-            # )
-            state_estimates = self.particle_states[:,0,best_indices[0,0],:]
         else:
             assert False, "Unsupported estimation method!"
 
@@ -396,29 +353,6 @@ class IMMParticleFilter(torchfilter.base.Filter):
             output1 = self.dynamics_models[1].gp(self.dynamics_models[1].x_train)
             loss1 = -mll1(output1, self.dynamics_models[1].dx_train)
             loss1.backward()
-
-
-            #mode loss
-            # for i in range(self.dynamics_models[0].x_train.shape[0]):
-            #     self.initialize_beliefs(
-            #         mean=self.dynamics_models[0].x_train[i][None],
-            #         #covariance=torch.zeros(size=(self.dynamics_models[0].x_train.shape[0], self.state_dim, self.state_dim)) + torch.eye(self.state_dim)[None, :, :] * 1e-7,
-            #         covariance = self.dynamics_models[0].Q[None, :, :].expand((self.dynamics_models[0].x_train[i][None].shape[0], self.state_dim, self.state_dim)) 
-            #         + torch.eye(self.state_dim)[None, :, :] * 1e-7,
-            #     )
-            #     observations, _ =  self.measurement_model.kalman_filter_measurement_model(states=self.dynamics_models[0].x_train[i][None].reshape((-1, self.state_dim)))
-
-            #     #controls = torch.zeros(self.dynamics_models[0].x_train[i].shape[0], 1, 1)
-            #     controls = torch.zeros(1, 1)
-
-            #     output0s, output0m = self(
-            #         observations=observations, controls=controls
-            #     )
-            #     loss0m = modeLoss(output0m[0])
-            #     loss0m.backward()
-
-            #calculate output of one imm pf step. loss is wrong mode
-
 
             if verbose: print('Iter %d/%d - Loss: %.3f' % (i + 1, iterations, loss0.item()+loss1.item()))
             optimizer.step()
