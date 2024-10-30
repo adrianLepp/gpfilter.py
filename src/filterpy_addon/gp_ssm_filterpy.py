@@ -5,8 +5,8 @@ import GPy
 import torch
 import gpytorch
 from abc import ABC, abstractmethod
-from util import normalize_min_max_np, denormalize_min_max, cholesky_fix
-from multi_gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
+from utils import normalize_min_max_np, denormalize_min_max, cholesky_fix
+from gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
 
 DEBUG = False
 

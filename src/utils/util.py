@@ -60,6 +60,8 @@ def normalize_min_max_torch(data:torch.tensor, min_val:float=None, delta:float=N
     normalized_data = (data - min_val) / delta
     return normalized_data, (min_val, delta)
 
+# %% cholesky decomposition fix
+
 def fix_nonpositive_definite(a):
     EPS = 1e-6;
     ZERO = 1e-10;

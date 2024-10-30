@@ -2,10 +2,11 @@
 from filterpy.kalman import UnscentedKalmanFilter, MerweScaledSigmaPoints
 from filterpy.common import Q_discrete_white_noise
 import numpy as np
-from gp_ssm_filterpy import GP_UKF
-from dynamicSystem import simulateNonlinearSSM
 import matplotlib.pyplot as plt
-from util import cholesky_fix
+# --------------------------------------------------------------------------------
+from filterpy_addon import GP_UKF
+from system import simulateNonlinearSSM
+from utils import cholesky_fix
 
 
 #--------------------------------------------------------------------------------

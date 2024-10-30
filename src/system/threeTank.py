@@ -57,7 +57,7 @@ class ThreeTank():
         return y
     
     
-def getThreeTankEquations(param=parameter, observe= (True, True, True)):
+def getSystemEquations(param=parameter, observe= (True, True, True)):
     threeTank  = ThreeTank(param)
 
     '''

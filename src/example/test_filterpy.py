@@ -1,14 +1,16 @@
 from filterpy.kalman import IMMEstimator
 import numpy as np
 import matplotlib.pyplot as plt
-from threeTank import getThreeTankEquations, ThreeTank, parameter as param
-from gp_ssm_filterpy import GP_SSM_gpytorch
-from multi_gp import BatchIndependentMultitaskGPModel, MultitaskGPModel, ConvolvedGPModel
-from helper import init_GP_UKF, init_UKF, createTrainingData
 import pandas as pd
 import json
+# --------------------------------------------------------------------------------
+from system.threeTank import getSystemEquations,  parameter as param
+from system import ThreeTank
+from filterpy_addon import GP_SSM_gpytorch
+from gp import BatchIndependentMultitaskGPModel, MultitaskGPModel, ConvolvedGPModel
+from utils.helper import init_GP_UKF, init_UKF, createTrainingData
 
-stateTransition, observation = getThreeTankEquations(param, observe= (True, False, False))
+stateTransition, observation = getSystemEquations(param, observe= (True, False, False))
 # %%
 
 simCounter = 4
@@ -95,7 +97,7 @@ def createFilter(modeN:int, x_std:float, z_std:float, P:float, mu:list[float], t
         
         else:
             for i in range(modeN):
-                stateTransition, observation = getThreeTankEquations(params[i])
+                stateTransition, observation = getSystemEquations(params[i])
                 filters.append(init_UKF(x0, stateTransition, observation,stateN, x_std, P, z_std, dt, alpha, beta, kappa))
 
         immUkf = IMMEstimator(filters, mu, trans)

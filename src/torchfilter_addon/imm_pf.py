@@ -362,6 +362,3 @@ class IMMParticleFilter(torchfilter.base.Filter):
 
         self.dynamics_models[1].gp.eval()
         self.dynamics_models[1].likelihood.eval()
-
-def modeLoss(mode_probability):
-    return -torch.log(mode_probability)

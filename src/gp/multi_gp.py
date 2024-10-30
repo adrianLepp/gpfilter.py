@@ -1,6 +1,6 @@
 import torch
 import gpytorch
-from kernel import ConvolvedProcessKernel
+from gp import ConvolvedProcessKernel
 
 class BatchIndependentMultitaskGPModel(gpytorch.models.ExactGP):
     '''

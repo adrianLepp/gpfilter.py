@@ -3,17 +3,18 @@ from torchfilter import types
 import torch
 import torch.nn as nn
 from typing import Tuple, cast
+from system.threeTank import parameter
 
-parameter = {
-    'u': 1.2371e-4,
-    'c13': 2.5046e-5,
-    'c32': 2.5046e-5,
-    'c2R': 1.9988e-5,
-    'g': 9.81 ,
-    'A': 0.0154,
-    'sigmaX': 1e-6,
-    'sigmaY': 5e-4,
-}
+# parameter = {
+#     'u': 1.2371e-4,
+#     'c13': 2.5046e-5,
+#     'c32': 2.5046e-5,
+#     'c2R': 1.9988e-5,
+#     'g': 9.81 ,
+#     'A': 0.0154,
+#     'sigmaX': 1e-6,
+#     'sigmaY': 5e-4,
+# }
 
 class ThreeTankDynamicsModel(torchfilter.base.DynamicsModel):
     """Forward model for our GP system. Maps (initial_states, controls) pairs to

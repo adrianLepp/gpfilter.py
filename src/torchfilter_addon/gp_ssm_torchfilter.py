@@ -4,11 +4,10 @@ import torch
 import torch.nn as nn
 from typing import Tuple, cast
 import gpytorch
-
 gpytorch.settings.debug(False)
-
-from multi_gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
-from util import normalize_min_max_torch, denormalize_min_max
+# --------------------------------------------------------------------------------
+from gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
+from utils import normalize_min_max_torch, denormalize_min_max
 
 class GpDynamicsModel(torchfilter.base.DynamicsModel):
     """Forward model for our GP system. Maps (initial_states, controls) pairs to

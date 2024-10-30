@@ -4,21 +4,17 @@ import torch
 from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
-
 import pandas as pd
 import json
-
-from threeTank import ThreeTank, parameter as param
-from helper import createTrainingData
-from measurement import IdentityParticleFilterMeasurementModel
-from gp_ssm_torchfilter import GpDynamicsModel
-from threeTank_torchfilter import ThreeTankDynamicsModel
-from imm_pf import IMMParticleFilter
-
-from multi_gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
+# --------------------------------------------------------------------------------
+from system import ThreeTank
+from system.threeTank import parameter as param
+from utils.helper import createTrainingData
+from torchfilter_addon import IdentityParticleFilterMeasurementModel, GpDynamicsModel, ThreeTankDynamicsModel, IMMParticleFilter
+from gp import MultitaskGPModel, BatchIndependentMultitaskGPModel, ConvolvedGPModel
 
 
-GPModel = ConvolvedGPModel
+GPModel = MultitaskGPModel
 
 verbose = True
 MULTI_MODEL = True
