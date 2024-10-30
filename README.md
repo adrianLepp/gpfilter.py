@@ -1,18 +1,16 @@
 # gpfilter.py
 
-**`gpfilter`** implements the gaussian process (GP) as discrete time state space model to be implemented into bayesian filters (BF).
-
-The filter implementations are based on 
-[`filterpy`](https://github.com/rlabbe/filterpy) 
+**`gpfilter`** implements the gaussian process (GP) as discrete time state space model for hybrid state estimation with the interacting multiple model (IMM).
+The bayes filter (BF) implementations are based on 
+[`filterpy`](https://github.com/rlabbe/filterpy) (Unscented Kalman Filter) 
 and
-[`torchfilter`](https://github.com/stanford-iprl-lab/torchfilter)
+[`torchfilter`](https://github.com/stanford-iprl-lab/torchfilter) (Particle Filter)
 .
-The `torchfilter` library is augmented with an interacting multiple model particle filter (IMM-PF) which is based on the existing particle filter (pf) implementation and the algorithm presented in [1].
-The gaussian process models are from [`GpyTorch`](https://github.com/cornellius-gp/gpytorch).
+Both libraries implement also other filters, which should be able to used here, but are not testet yet.
+The `torchfilter` library is augmented with an interacting multiple model particle filter (IMM-PF) which is based on the existing particle filter implementation and the IMM-PF algorithm presented in [1].
+Gaussian process state space models models are derived from [`GpyTorch`](https://github.com/cornellius-gp/gpytorch).
 
-
-TBC.
-
+The implementation based on `torchfilter` is to be favored, since everythin is based on `pytorch` and the parameter optimization could be done for the whole filter module at once. At the moment optimization is only done for the single gp models, but in future this should be implemented since it makes much more sence to tune the gp predictions according to the filter performance. 
 
 ### Installation
 
@@ -21,6 +19,10 @@ $ git clone https://github.com/adrianLepp/gpfilter.py
 $ cd gpfilter.py
 $ pip install -e .
 ```
+
+### Use
+
+To see how to use the models, check the files in the submodule `examples`, where one implentation for torchfilter and filterpy is done for a nonlinear water tank system. 
 
 ### References
 
